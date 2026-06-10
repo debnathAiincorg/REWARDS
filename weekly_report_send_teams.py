@@ -37,7 +37,18 @@ def get_access_token():
         AUTHORITY = f"https://login.microsoftonline.com/{SHAREPOINT_TENANT}"
         SCOPES = ["https://graph.microsoft.com/.default"]
 
-        app = PublicClientApplication(CLIENT_ID, authority=AUTHORITY)
+        app = PublicClientApplication(
+            CLIENT_ID,
+            authority=AUTHORITY,
+            token_cache=None
+        )
+
+        accounts = app.get_accounts(username=SHAREPOINT_USERNAME)
+        if accounts:
+            result = app.acquire_token_silent(SCOPES, account=accounts[0])
+            if result and "access_token" in result:
+                return result["access_token"]
+
         result = app.acquire_token_by_username_password(
             username=SHAREPOINT_USERNAME,
             password=SHAREPOINT_PASSWORD,
