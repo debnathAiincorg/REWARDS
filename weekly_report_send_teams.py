@@ -88,7 +88,7 @@ def download_source_file():
 
     # Method 2: Try public SharePoint link
     print("Attempting to download from public SharePoint link...")
-    url = "https://cloudaiorg.sharepoint.com/:x:/r/sites/StrictEmployeePerformance/_layouts/15/Doc.aspx?sourcedoc=%7B4CB66907-495B-454F-BF9E-B119D4DA1461%7D&file=Strict%20Employee%20Performance%20Analysis.xlsx&download=1"
+    url = "https://cloudaiorg.sharepoint.com/:x:/r/sites/StrictEmployeePerformance/_layouts/15/Doc.aspx?sourcedoc=%7B4CB66907-495B-454F-BF9E-B119D4DA1461%7D&file=Strict%20Employee%20Performance%20Analysis.xlsx&fromShare=true&action=default&mobileredirect=true&download=1"
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
