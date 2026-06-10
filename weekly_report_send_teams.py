@@ -6,25 +6,16 @@ import os
 import glob
 from datetime import datetime, timedelta
 
-# Load credentials from .env file
-try:
-    from dotenv import dotenv_values
-except ImportError:
-    print("Installing python-dotenv...")
-    import subprocess
-    subprocess.check_call(["pip", "install", "python-dotenv"])
-    from dotenv import dotenv_values
-
-config = dotenv_values(r"D:\SHAREPOINT\.env")
-SHAREPOINT_USERNAME = config.get("SHAREPOINT_USERNAME")
-SHAREPOINT_PASSWORD = config.get("SHAREPOINT_PASSWORD")
-SHAREPOINT_TENANT = config.get("SHAREPOINT_TENANT")
+# Load credentials from environment variables
+SHAREPOINT_USERNAME = os.environ.get("SHAREPOINT_USERNAME")
+SHAREPOINT_PASSWORD = os.environ.get("SHAREPOINT_PASSWORD")
+SHAREPOINT_TENANT = os.environ.get("SHAREPOINT_TENANT")
 
 # Teams Webhook URL (not sensitive - safe to hardcode)
 WEBHOOK_URL = "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7a93c82bdb7b4095894f25309cbe4673/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NymSHVyWZFGo_y0NQLWsEeapIiWl7f0L44B8z0zYAW4"
 
 # File paths
-TEMP_FILE = r"D:\SHAREPOINT\temp_source.xlsx"
+TEMP_FILE = "/tmp/temp_source.xlsx"
 SOURCE_FILE_LOCAL = r"D:\SHAREPOINT\Strict Employee Performance Analysis.xlsx"
 
 # SharePoint API details (for authenticated download)
@@ -33,7 +24,7 @@ SHAREPOINT_ITEM_ID = "01ZAECLIUEFXFIUSMHQNAZRWSUI2DSRS5G"
 
 
 def get_access_token():
-    """Get SharePoint access token using credentials from .env"""
+    """Get SharePoint access token using credentials from environment variables"""
     try:
         from msal import PublicClientApplication
 
@@ -109,7 +100,7 @@ def download_source_file():
 
         # Check if we got a valid Excel file
         if response.headers.get('content-type', '').startswith('text/html') or b'<!DOCTYPE' in response.content[:100] or response.headers.get('content-type', '').startswith('text/'):
-            print("Note: Public link requires authentication. Using .env credentials...")
+            print("Note: Public link requires authentication. Using environment variable credentials...")
         else:
             with open(TEMP_FILE, 'wb') as f:
                 f.write(response.content)
@@ -134,11 +125,11 @@ def download_source_file():
     print("[ERROR] Failed to download source file from all methods:")
     print("  1. Local file check: " + SOURCE_FILE_LOCAL)
     print("  2. Public SharePoint link (requires accessibility)")
-    print("  3. Authenticated download via .env credentials")
+    print("  3. Authenticated download via environment variable credentials")
     print("")
     print("To fix, do ONE of:")
     print("  • Copy Excel file to: " + SOURCE_FILE_LOCAL)
-    print("  • Update .env file with correct SharePoint credentials")
+    print("  • Set environment variables: SHAREPOINT_USERNAME, SHAREPOINT_PASSWORD, SHAREPOINT_TENANT")
     print("  • Ensure the public link is accessible (no login required)")
     print("")
     return False
@@ -431,8 +422,8 @@ def send_teams_webhook_message(webhook_url, adaptive_card):
 def cleanup_temp_file():
     """Delete temporary files created during execution"""
     temp_files = [
+        "/tmp/temp_source.xlsx",
         r"D:\SHAREPOINT\Rewards.xlsx",
-        r"D:\SHAREPOINT\temp_source.xlsx",
         r"D:\SHAREPOINT\Book2.xlsx"
     ]
 
