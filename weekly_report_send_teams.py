@@ -41,7 +41,10 @@ def get_access_token():
 
         if "access_token" in result:
             return result["access_token"]
-        return None
+        else:
+            error_msg = result.get("error_description", result.get("error", "Unknown error"))
+            print(f"Note: Authentication failed - {error_msg}")
+            return None
     except Exception as e:
         print(f"Note: Could not authenticate ({type(e).__name__})")
         return None
