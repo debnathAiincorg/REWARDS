@@ -24,8 +24,4 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run weekly report
-        env:
-          SHAREPOINT_USERNAME: ${{ secrets.SHAREPOINT_USERNAME }}
-          SHAREPOINT_PASSWORD: ${{ secrets.SHAREPOINT_PASSWORD }}
-          SHAREPOINT_TENANT: ${{ secrets.SHAREPOINT_TENANT }}
         run: python weekly_report_send_teams.py
