@@ -4,6 +4,7 @@ import requests
 from openpyxl import load_workbook
 import os
 import glob
+import time
 from datetime import datetime, timedelta
 
 # Load credentials from environment variables
@@ -112,16 +113,24 @@ def download_source_file():
     except Exception as e:
         print(f"Note: Public link failed ({type(e).__name__})")
 
-    # Method 3: Try authenticated download via SharePoint API
+    # Method 3: Try authenticated download via SharePoint API (with retry)
     if SHAREPOINT_USERNAME and SHAREPOINT_PASSWORD and SHAREPOINT_TENANT:
-        print("Attempting authenticated download via SharePoint API...")
-        token = get_access_token()
-        if token and download_from_sharepoint_api(token):
-            # Clear credentials from memory after use
-            globals()['SHAREPOINT_USERNAME'] = None
-            globals()['SHAREPOINT_PASSWORD'] = None
-            globals()['SHAREPOINT_TENANT'] = None
-            return True
+        max_retries = 3
+        retry_delay = 30
+
+        for attempt in range(1, max_retries + 1):
+            print(f"Attempting authenticated download via SharePoint API (attempt {attempt}/{max_retries})...")
+            token = get_access_token()
+            if token and download_from_sharepoint_api(token):
+                # Clear credentials from memory after use
+                globals()['SHAREPOINT_USERNAME'] = None
+                globals()['SHAREPOINT_PASSWORD'] = None
+                globals()['SHAREPOINT_TENANT'] = None
+                return True
+
+            if attempt < max_retries:
+                print(f"Authenticated download failed, retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
 
     # All methods failed
     print("")
