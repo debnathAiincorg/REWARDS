@@ -6,6 +6,10 @@ import os
 import glob
 import time
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv(r"D:\SHAREPOINT\.env")
 
 # Load credentials from environment variables
 SHAREPOINT_USERNAME = os.environ.get("SHAREPOINT_USERNAME")
