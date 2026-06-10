@@ -20,7 +20,7 @@ SHAREPOINT_TENANT = os.environ.get("SHAREPOINT_TENANT")
 WEBHOOK_URL = "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7a93c82bdb7b4095894f25309cbe4673/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NymSHVyWZFGo_y0NQLWsEeapIiWl7f0L44B8z0zYAW4"
 
 # File paths
-TEMP_FILE = "/tmp/temp_source.xlsx"
+TEMP_FILE = r"D:\sharepoint\temp_source.xlsx"
 SOURCE_FILE_LOCAL = r"D:\SHAREPOINT\Strict Employee Performance Analysis.xlsx"
 
 # SharePoint API details (for authenticated download)
