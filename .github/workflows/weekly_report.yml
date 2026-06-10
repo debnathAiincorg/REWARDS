@@ -2,8 +2,8 @@ name: Weekly Report
 
 on:
   schedule:
-    # Every Saturday at 9 AM IST (3:30 AM UTC)
-    - cron: '30 3 * * 6'
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   send-weekly-report:
@@ -24,4 +24,8 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run weekly report
+        env:
+          SHAREPOINT_USERNAME: ${{ secrets.SHAREPOINT_USERNAME }}
+          SHAREPOINT_PASSWORD: ${{ secrets.SHAREPOINT_PASSWORD }}
+          SHAREPOINT_TENANT: ${{ secrets.SHAREPOINT_TENANT }}
         run: python weekly_report_send_teams.py
