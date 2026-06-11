@@ -1,7 +1,7 @@
 name: Weekly Performance Report
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 * * * *'
   push:
     branches:
       - main
