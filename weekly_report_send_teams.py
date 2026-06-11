@@ -11,10 +11,10 @@ from dotenv import load_dotenv
 # Load .env file if it exists
 load_dotenv(r"D:\SHAREPOINT\.env")
 
-# Load credentials from environment variables
-SHAREPOINT_USERNAME = os.environ.get("SHAREPOINT_USERNAME")
-SHAREPOINT_PASSWORD = os.environ.get("SHAREPOINT_PASSWORD")
-SHAREPOINT_TENANT = os.environ.get("SHAREPOINT_TENANT")
+# Load credentials from environment variables (Azure App Registration)
+AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
+AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
+AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
 
 # Teams Webhook URL (not sensitive - safe to hardcode)
 WEBHOOK_URL = "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7a93c82bdb7b4095894f25309cbe4673/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NymSHVyWZFGo_y0NQLWsEeapIiWl7f0L44B8z0zYAW4"
@@ -29,30 +29,19 @@ SHAREPOINT_ITEM_ID = "01ZAECLIUEFXFIUSMHQNAZRWSUI2DSRS5G"
 
 
 def get_access_token():
-    """Get SharePoint access token using credentials from environment variables"""
+    """Get SharePoint access token using Azure App Registration client credentials"""
     try:
-        from msal import PublicClientApplication
+        from msal import ConfidentialClientApplication
 
-        CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
-        AUTHORITY = f"https://login.microsoftonline.com/{SHAREPOINT_TENANT}"
-        SCOPES = ["https://graph.microsoft.com/.default"]
-
-        app = PublicClientApplication(
-            CLIENT_ID,
-            authority=AUTHORITY,
-            token_cache=None
+        authority = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}"
+        app = ConfidentialClientApplication(
+            AZURE_CLIENT_ID,
+            client_credential=AZURE_CLIENT_SECRET,
+            authority=authority
         )
 
-        accounts = app.get_accounts(username=SHAREPOINT_USERNAME)
-        if accounts:
-            result = app.acquire_token_silent(SCOPES, account=accounts[0])
-            if result and "access_token" in result:
-                return result["access_token"]
-
-        result = app.acquire_token_by_username_password(
-            username=SHAREPOINT_USERNAME,
-            password=SHAREPOINT_PASSWORD,
-            scopes=SCOPES
+        result = app.acquire_token_for_client(
+            scopes=["https://graph.microsoft.com/.default"]
         )
 
         if "access_token" in result:
@@ -128,19 +117,15 @@ def download_source_file():
     except Exception as e:
         print(f"Note: Public link failed ({type(e).__name__})")
 
-    # Method 3: Try authenticated download via SharePoint API (with retry)
-    if SHAREPOINT_USERNAME and SHAREPOINT_PASSWORD and SHAREPOINT_TENANT:
+    # Method 3: Try authenticated download via Microsoft Graph API (with retry)
+    if AZURE_CLIENT_ID and AZURE_TENANT_ID and AZURE_CLIENT_SECRET:
         max_retries = 3
         retry_delay = 30
 
         for attempt in range(1, max_retries + 1):
-            print(f"Attempting authenticated download via SharePoint API (attempt {attempt}/{max_retries})...")
+            print(f"Attempting authenticated download via Microsoft Graph API (attempt {attempt}/{max_retries})...")
             token = get_access_token()
             if token and download_from_sharepoint_api(token):
-                # Clear credentials from memory after use
-                globals()['SHAREPOINT_USERNAME'] = None
-                globals()['SHAREPOINT_PASSWORD'] = None
-                globals()['SHAREPOINT_TENANT'] = None
                 return True
 
             if attempt < max_retries:
@@ -152,11 +137,11 @@ def download_source_file():
     print("[ERROR] Failed to download source file from all methods:")
     print("  1. Local file check: " + SOURCE_FILE_LOCAL)
     print("  2. Public SharePoint link (requires accessibility)")
-    print("  3. Authenticated download via environment variable credentials")
+    print("  3. Authenticated download via Microsoft Graph API")
     print("")
     print("To fix, do ONE of:")
     print("  • Copy Excel file to: " + SOURCE_FILE_LOCAL)
-    print("  • Set environment variables: SHAREPOINT_USERNAME, SHAREPOINT_PASSWORD, SHAREPOINT_TENANT")
+    print("  • Set environment variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_CLIENT_SECRET")
     print("  • Ensure the public link is accessible (no login required)")
     print("")
     return False
