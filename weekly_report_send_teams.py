@@ -114,6 +114,8 @@ def get_cumulative_data():
         week_label = f"Week #{week_number} - {this_monday.strftime('%b %d')} (Monday - No Data Yet)"
         start = None
         end = None
+        prev_day_start = None
+        prev_day_end = None
     elif weekday == 6:  # Sunday → previous full week Mon to Sat
         last_monday = this_monday - timedelta(days=7)
         last_saturday = last_monday + timedelta(days=5)
@@ -121,11 +123,15 @@ def get_cumulative_data():
         end = last_saturday
         week_number = start.isocalendar()[1]
         week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')} (Complete Week)"
+        prev_day_start = last_saturday
+        prev_day_end = last_saturday
     else:  # Tue to Sat → this Monday to yesterday
         start = this_monday
         end = today - timedelta(days=1)
         week_number = start.isocalendar()[1]
         week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')}"
+        prev_day_start = today - timedelta(days=1)
+        prev_day_end = today - timedelta(days=1)
 
     # Load Excel
     wb = load_workbook(TEMP_FILE)
@@ -165,17 +171,19 @@ def get_cumulative_data():
     # Monday → return all employees with 0 points
     if weekday == 0:
         employees = sorted(
-            [{"name": n, "points": 0, "amount": 0} for n in all_names],
+            [{"name": n, "points": 0, "amount": 0, "prev_day_points": 0, "prev_day_amount": 0} for n in all_names],
             key=lambda x: x["name"]
         )
         return week_label, employees, None
 
     # Aggregate points per employee within date range
-    # Missing dates = 0 (defaultdict handles this automatically)
     totals = defaultdict(int)
+    prev_day_totals = defaultdict(int)
     for name in all_names:
-        totals[name] = 0  # initialize all employees with 0
+        totals[name] = 0
+        prev_day_totals[name] = 0
 
+    # Read weekly data
     if date_col:
         for row in range(2, ws.max_row + 1):
             name_val = ws.cell(row=row, column=name_col).value
@@ -190,8 +198,23 @@ def get_cumulative_data():
             pts = sum(int(ws.cell(row=row, column=c).value or 0) for c in point_cols)
             totals[str(name_val).strip()] += pts
 
+    # Read previous day data
+    if date_col and prev_day_start and prev_day_end:
+        for row in range(2, ws.max_row + 1):
+            name_val = ws.cell(row=row, column=name_col).value
+            date_val = ws.cell(row=row, column=date_col).value
+            if not name_val or not date_val:
+                continue
+            row_date = date_val.date() if hasattr(date_val, 'date') else None
+            if not row_date:
+                continue
+            if not (prev_day_start <= row_date <= prev_day_end):
+                continue
+            pts = sum(int(ws.cell(row=row, column=c).value or 0) for c in point_cols)
+            prev_day_totals[str(name_val).strip()] += pts
+
     employees = sorted(
-        [{"name": n, "points": p, "amount": p * 10} for n, p in totals.items()],
+        [{"name": n, "points": p, "amount": p * 10, "prev_day_points": prev_day_totals.get(n, 0), "prev_day_amount": prev_day_totals.get(n, 0) * 10} for n, p in totals.items()],
         key=lambda x: x["points"], reverse=True
     )
     return week_label, employees, None
@@ -199,43 +222,53 @@ def get_cumulative_data():
 
 def format_teams_message(week_label, employees):
     body = [
-        {"type": "TextBlock", "text": "Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent"},
-        {"type": "TextBlock", "text": week_label, "weight": "Bolder", "size": "Medium", "spacing": "None"},
+        {"type": "TextBlock", "text": "Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": week_label, "weight": "Bolder", "size": "Medium", "spacing": "None", "wrap": True},
         {
             "type": "ColumnSet",
             "separator": True,
             "columns": [
-                {"type": "Column", "width": "stretch", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder"}]},
-                {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": "Points", "weight": "Bolder", "horizontalAlignment": "Center"}]},
-                {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": "Amount", "weight": "Bolder", "horizontalAlignment": "Right"}]}
+                {"type": "Column", "width": "3", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Previous Day Point", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Previous Day Amount", "weight": "Bolder", "horizontalAlignment": "Right", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Weekly Total Point", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Weekly Total Amount", "weight": "Bolder", "horizontalAlignment": "Right", "wrap": True}]}
             ]
         }
     ]
 
     for emp in employees:
         name = emp["name"]
-        points = int(emp["points"]) if emp["points"] is not None else 0
-        amount = int(emp["amount"]) if emp["amount"] else 0
+        prev_day_points = int(emp["prev_day_points"]) if emp["prev_day_points"] is not None else 0
+        prev_day_amount = int(emp["prev_day_amount"]) if emp["prev_day_amount"] is not None else 0
+        weekly_points = int(emp["points"]) if emp["points"] is not None else 0
+        weekly_amount = int(emp["amount"]) if emp["amount"] else 0
         body.append({
             "type": "ColumnSet",
             "separator": True,
             "style": "default",
             "columns": [
-                {"type": "Column", "width": "stretch", "items": [{"type": "TextBlock", "text": str(name)}]},
-                {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": str(points), "horizontalAlignment": "Center"}]},
-                {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": f"₹{amount}", "horizontalAlignment": "Right"}]}
+                {"type": "Column", "width": "3", "items": [{"type": "TextBlock", "text": str(name), "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(prev_day_points), "horizontalAlignment": "Center", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": f"₹{prev_day_amount}", "horizontalAlignment": "Right", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(weekly_points), "horizontalAlignment": "Center", "wrap": True}]},
+                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": f"₹{weekly_amount}", "horizontalAlignment": "Right", "wrap": True}]}
             ]
         })
 
-    total_points = sum(int(emp["points"]) if emp["points"] else 0 for emp in employees)
-    total_amount = total_points * 10
+    total_prev_day_points = sum(int(emp["prev_day_points"]) if emp["prev_day_points"] else 0 for emp in employees)
+    total_prev_day_amount = total_prev_day_points * 10
+    total_weekly_points = sum(int(emp["points"]) if emp["points"] else 0 for emp in employees)
+    total_weekly_amount = total_weekly_points * 10
     body.append({
         "type": "ColumnSet",
         "separator": True,
         "columns": [
-            {"type": "Column", "width": "stretch", "items": [{"type": "TextBlock", "text": "TOTAL", "weight": "Bolder"}]},
-            {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": str(total_points), "weight": "Bolder", "horizontalAlignment": "Center"}]},
-            {"type": "Column", "width": "100px", "items": [{"type": "TextBlock", "text": f"Rs.{total_amount}", "weight": "Bolder", "horizontalAlignment": "Right"}]}
+            {"type": "Column", "width": "3", "items": [{"type": "TextBlock", "text": "TOTAL", "weight": "Bolder", "wrap": True}]},
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(total_prev_day_points), "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": f"₹{total_prev_day_amount}", "weight": "Bolder", "horizontalAlignment": "Right", "wrap": True}]},
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(total_weekly_points), "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": f"₹{total_weekly_amount}", "weight": "Bolder", "horizontalAlignment": "Right", "wrap": True}]}
         ]
     })
 
@@ -299,7 +332,7 @@ if __name__ == "__main__":
     print(f"[OK] Employees: {len(employee_data)}")
     print("\nVerification:")
     for emp in employee_data:
-        print(f"  {emp['name']}: {emp['points']} pts = Rs.{emp['amount']}")
+        print(f"  {emp['name']}: Prev Day {emp['prev_day_points']} pts (₹{emp['prev_day_amount']}) | Weekly {emp['points']} pts (₹{emp['amount']})")
     print()
 
     message = format_teams_message(week_label, employee_data)
