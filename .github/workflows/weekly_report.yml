@@ -1,6 +1,8 @@
 name: Weekly Performance Report
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [weekly_report]
 jobs:
   send-weekly-report:
     runs-on: ubuntu-latest
