@@ -111,20 +111,19 @@ def get_cumulative_data():
 
     if weekday == 0:  # Monday → zero report, no date range needed
         week_number = this_monday.isocalendar()[1]
-        week_label = f"Week #{week_number} - {this_monday.strftime('%b %d')} (Monday - No Data Yet)"
+        yesterday = today - timedelta(days=1)
+        week_label = f"Week #{week_number} - {yesterday.strftime('%b %d')} (Sunday - Week off)"
         start = None
         end = None
         prev_day_start = None
         prev_day_end = None
-    elif weekday == 6:  # Sunday → previous full week Mon to Sat
-        last_monday = this_monday - timedelta(days=7)
-        last_saturday = last_monday + timedelta(days=5)
-        start = last_monday
-        end = last_saturday
+    elif weekday == 6:  # Sunday → this week Mon to yesterday (Saturday = complete week)
+        start = this_monday
+        end = today - timedelta(days=1)  # yesterday = Saturday
         week_number = start.isocalendar()[1]
         week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')} (Complete Week)"
-        prev_day_start = last_saturday
-        prev_day_end = last_saturday
+        prev_day_start = end
+        prev_day_end = end
     else:  # Tue to Sat → this Monday to yesterday
         start = this_monday
         end = today - timedelta(days=1)
