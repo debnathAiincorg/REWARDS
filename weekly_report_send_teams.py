@@ -4,7 +4,6 @@ import requests
 from openpyxl import load_workbook
 from collections import defaultdict
 import os
-import glob
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -22,7 +21,6 @@ WEBHOOK_URL = "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.
 
 # File paths
 TEMP_FILE = r"D:\sharepoint\temp_source.xlsx"
-SOURCE_FILE_LOCAL = r"D:\SHAREPOINT\Strict Employee Performance Analysis.xlsx"
 
 # SharePoint API details
 SHAREPOINT_DRIVE_ID = "b!_Oj5AOOCqUa-6fnpgxmwM4Tmz3IIfOZIhM-bF3vfV8Q7o8oZ3WyrQ4ILTnuUDgHw"
