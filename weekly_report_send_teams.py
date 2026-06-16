@@ -107,14 +107,13 @@ def get_cumulative_data():
 
     this_monday = today - timedelta(days=weekday)
 
-    if weekday == 0:  # Monday → zero report, no date range needed
-        week_number = this_monday.isocalendar()[1]
-        yesterday = today - timedelta(days=1)
-        week_label = f"Week #{week_number} - {yesterday.strftime('%b %d')} (Sunday - Week off)"
-        start = None
-        end = None
-        prev_day_start = None
-        prev_day_end = None
+    if weekday == 0:  # Monday → show previous complete week same as Sunday
+        start = today - timedelta(days=7)   # previous Monday
+        end = today - timedelta(days=2)     # previous Saturday
+        week_number = start.isocalendar()[1]
+        week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')} (Complete Week)"
+        prev_day_start = end
+        prev_day_end = end
     elif weekday == 6:  # Sunday → this week Mon to yesterday (Saturday = complete week)
         start = this_monday
         end = today - timedelta(days=1)  # yesterday = Saturday
@@ -167,14 +166,6 @@ def get_cumulative_data():
         if val and str(val).strip() and str(val).strip() not in seen:
             seen.add(str(val).strip())
             all_names.append(str(val).strip())
-
-    # Monday → return all employees with 0 points
-    if weekday == 0:
-        employees = sorted(
-            [{"name": n, "points": 0, "amount": 0, "prev_day_points": 0, "prev_day_amount": 0} for n in all_names],
-            key=lambda x: x["name"]
-        )
-        return week_label, employees, None
 
     # Aggregate points per employee within date range
     totals = defaultdict(int)
