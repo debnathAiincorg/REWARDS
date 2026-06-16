@@ -126,7 +126,10 @@ def get_cumulative_data():
         start = this_monday
         end = today - timedelta(days=1)
         week_number = start.isocalendar()[1]
-        week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')}"
+        if start == end:
+            week_label = f"Week #{week_number} - {start.strftime('%b %d')}"
+        else:
+            week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')}"
         prev_day_start = today - timedelta(days=1)
         prev_day_end = today - timedelta(days=1)
 
