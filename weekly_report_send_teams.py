@@ -206,7 +206,7 @@ def get_cumulative_data():
 
     employees = sorted(
         [{"name": n, "points": p, "amount": p * 10, "prev_day_points": prev_day_totals.get(n, 0), "prev_day_amount": prev_day_totals.get(n, 0) * 10} for n, p in totals.items()],
-        key=lambda x: x["points"], reverse=True
+        key=lambda x: (-x["prev_day_amount"], x["name"])
     )
     return week_label, employees, None
 
