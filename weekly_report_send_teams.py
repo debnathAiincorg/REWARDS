@@ -174,7 +174,8 @@ def get_cumulative_data():
         totals[name] = 0
         prev_day_totals[name] = 0
 
-    # Read weekly data
+    # Deduplicate rows by (name, date) to prevent double-counting
+    row_data = {}  # key: (name, date), value: points
     if date_col:
         for row in range(2, ws.max_row + 1):
             name_val = ws.cell(row=row, column=name_col).value
@@ -184,25 +185,19 @@ def get_cumulative_data():
             row_date = date_val.date() if hasattr(date_val, 'date') else None
             if not row_date:
                 continue
-            if not (start <= row_date <= end):
-                continue
             pts = sum(int(ws.cell(row=row, column=c).value or 0) for c in point_cols)
-            totals[str(name_val).strip()] += pts
+            name = str(name_val).strip()
+            key = (name, row_date)
+            if key in row_data:
+                print(f"[WARNING] Duplicate entry found for {name} on {row_date} — using last occurrence, please check source file")
+            row_data[key] = pts
 
-    # Read previous day data
-    if date_col and prev_day_start and prev_day_end:
-        for row in range(2, ws.max_row + 1):
-            name_val = ws.cell(row=row, column=name_col).value
-            date_val = ws.cell(row=row, column=date_col).value
-            if not name_val or not date_val:
-                continue
-            row_date = date_val.date() if hasattr(date_val, 'date') else None
-            if not row_date:
-                continue
-            if not (prev_day_start <= row_date <= prev_day_end):
-                continue
-            pts = sum(int(ws.cell(row=row, column=c).value or 0) for c in point_cols)
-            prev_day_totals[str(name_val).strip()] += pts
+    # Calculate weekly and previous-day totals from deduplicated data
+    for (name, row_date), pts in row_data.items():
+        if start <= row_date <= end:
+            totals[name] += pts
+        if prev_day_start <= row_date <= prev_day_end:
+            prev_day_totals[name] += pts
 
     employees = sorted(
         [{"name": n, "points": p, "amount": p * 10, "prev_day_points": prev_day_totals.get(n, 0), "prev_day_amount": prev_day_totals.get(n, 0) * 10} for n, p in totals.items()],
