@@ -144,13 +144,13 @@ Determining date range and reading Excel data...
 [OK] Previous Day (Jun 21): 10 employees
 
 Verification:
-  Pradip Ray: Prev Day 2 pts (₹20) | Weekly 8 pts (₹80)
-  Anurima Nath: Prev Day 1 pts (₹10) | Weekly 5 pts (₹50)
+  Employee1: Prev Day 2 pts (₹20) | Weekly 8 pts (₹80)
+  Employee2: Prev Day 1 pts (₹10) | Weekly 5 pts (₹50)
   ...
 
 Previous Day Breakdown (Jun 21):
-  Anurima Nath: Punctuality=0, L&D=0, Fluency Compliance=0, Innovation=0, Extraordinary Performance=0
-  Atreyee Majumder: Punctuality=0, L&D=0, Fluency Compliance=0, Innovation=0, Extraordinary Performance=0
+  Employee2: Punctuality=0, L&D=0, Fluency Compliance=0, Innovation=0, Extraordinary Performance=0
+  Employee3: Punctuality=0, L&D=0, Fluency Compliance=0, Innovation=0, Extraordinary Performance=0
   ...
 
 Sending Previous Day Performance Breakdown card to Teams...
@@ -178,9 +178,9 @@ Sending Weekly Performance Report card to Teams...
 
 | Index | Date | Name | Punctuality | L&D | Fluency Compliance | Innovation | Extraordinary Performance |
 |---|---|---|---|---|---|---|---|
-| 1 | 2026-06-22 | Pradip Ray | 1 | 1 | 0 | 0 | 0 |
-| 2 | 2026-06-22 | Anurima Nath | 1 | 1 | 0 | 0 | 0 |
-| 3 | 2026-06-21 | Pradip Ray | 0 | 0 | 0 | 0 | 0 |
+| 1 | 2026-06-22 | Employee1 | 1 | 1 | 0 | 0 | 0 |
+| 2 | 2026-06-22 | Employee2 | 1 | 1 | 0 | 0 | 0 |
+| 3 | 2026-06-21 | Employee1 | 0 | 0 | 0 | 0 | 0 |
 
 ---
 
