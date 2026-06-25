@@ -303,13 +303,13 @@ def get_cumulative_data():
     return week_label, employees, prev_day_breakdown_data
 
 
-def format_prev_day_card(prev_day_breakdown):
+def format_prev_day_card(prev_day_breakdown, title_prefix=""):
     """Build standalone Adaptive Card for previous day performance breakdown."""
     if not prev_day_breakdown or not prev_day_breakdown["employees"]:
         return None
 
     body = [
-        {"type": "TextBlock", "text": "Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": f"{title_prefix}Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": f"Date: {prev_day_breakdown['date_label']}", "weight": "Normal", "size": "Medium", "spacing": "None", "wrap": True},
         {
             "type": "ColumnSet",
@@ -348,9 +348,9 @@ def format_prev_day_card(prev_day_breakdown):
     }
 
 
-def format_teams_message(week_label, employees):
+def format_teams_message(week_label, employees, title_prefix=""):
     body = [
-        {"type": "TextBlock", "text": "Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": f"{title_prefix}Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": week_label, "weight": "Bolder", "size": "Medium", "spacing": "None", "wrap": True},
         {
             "type": "ColumnSet",
@@ -475,55 +475,120 @@ if __name__ == "__main__":
     print("WEEKLY PERFORMANCE REPORT - TEAMS SENDER")
     print("=" * 60)
 
+    TRIGGER_SOURCE = os.environ.get("TRIGGER_SOURCE", "scheduled")
+    print(f"[INFO] Trigger source: {TRIGGER_SOURCE}")
+
     if not download_source_file():
         exit(1)
 
-    print("Determining date range and reading Excel data...")
-    week_label, employee_data, prev_day_breakdown = get_cumulative_data()
+    yesterday_date = datetime.now().date() - timedelta(days=1)
+    yesterday_str = yesterday_date.isoformat()
+    fresh_yesterday_data = get_real_yesterday_data()
 
-    if not week_label or not employee_data:
-        print("[ERROR] No data to send.")
+    if TRIGGER_SOURCE == "watcher":
+        if not has_yesterday_data_changed(yesterday_str, fresh_yesterday_data):
+            print("[INFO] No change to yesterday's already-reported data. Exiting silently.")
+            cleanup_temp_file()
+            exit(0)
+
+        print("[INFO] Yesterday's data changed — sending corrected report.")
+        week_label, employee_data, _ = get_cumulative_data()
+        if not week_label or not employee_data:
+            print("[ERROR] No data to send.")
+            cleanup_temp_file()
+            exit(1)
+
+        corrected_breakdown = {
+            "date_label": yesterday_date.strftime("%b %d"),
+            "employees": sorted(
+                [{"name": name, **cats} for name, cats in fresh_yesterday_data.items()],
+                key=lambda x: x["name"],
+            ),
+        }
+        prefix = "🔧 Corrected Report - "
+        cards_sent = 0
+
+        if corrected_breakdown["employees"]:
+            prev_day_card = format_prev_day_card(corrected_breakdown, title_prefix=prefix)
+            if prev_day_card:
+                print("Sending corrected Previous Day Performance Breakdown card to Teams...")
+                if send_teams_webhook_message(WEBHOOK_URL, prev_day_card):
+                    print("[OK] Corrected Previous Day card sent successfully!")
+                    cards_sent += 1
+                else:
+                    print("[ERROR] Failed to send corrected Previous Day card to Teams")
+                    cleanup_temp_file()
+                    exit(1)
+
+        weekly_card = format_teams_message(week_label, employee_data, title_prefix=prefix)
+        print("Sending corrected Weekly Performance Report card to Teams...")
+        if send_teams_webhook_message(WEBHOOK_URL, weekly_card):
+            print("[OK] Corrected Weekly Report card sent successfully!")
+            cards_sent += 1
+        else:
+            print("[ERROR] Failed to send corrected Weekly Report card to Teams")
+            cleanup_temp_file()
+            exit(1)
+
+        save_snapshot(yesterday_str, fresh_yesterday_data)
+        print(f"\n[OK] Total corrected cards sent: {cards_sent}")
         cleanup_temp_file()
-        exit(1)
+        print("=" * 60)
 
-    print(f"[OK] Report: {week_label}")
-    print(f"[OK] Employees: {len(employee_data)}")
-    if prev_day_breakdown and prev_day_breakdown["employees"]:
-        print(f"[OK] Previous Day ({prev_day_breakdown['date_label']}): {len(prev_day_breakdown['employees'])} employees")
-    print("\nVerification:")
-    for emp in employee_data:
-        print(f"  {emp['name']}: Prev Day {emp['prev_day_points']} pts (₹{emp['prev_day_amount']}) | Weekly {emp['points']} pts (₹{emp['amount']})")
-    if prev_day_breakdown and prev_day_breakdown["employees"]:
-        print(f"\nPrevious Day Breakdown ({prev_day_breakdown['date_label']}):")
-        for emp in prev_day_breakdown["employees"]:
-            print(f"  {emp['name']}: Punctuality={emp.get('Punctuality', 0)}, L&D={emp.get('L&D', 0)}, Fluency Compliance={emp.get('Fluency Compliance', 0)}, Innovation={emp.get('Innovation', 0)}, Extraordinary Performance={emp.get('Extraordinary Performance', 0)}")
-    print()
-
-    cards_sent = 0
-
-    if prev_day_breakdown and prev_day_breakdown["employees"]:
-        prev_day_card = format_prev_day_card(prev_day_breakdown)
-        if prev_day_card:
-            print("Sending Previous Day Performance Breakdown card to Teams...")
-            if send_teams_webhook_message(WEBHOOK_URL, prev_day_card):
-                print("[OK] Previous Day card sent successfully!")
-                cards_sent += 1
-            else:
-                print("ERROR: Failed to send Previous Day card to Teams")
-                cleanup_temp_file()
-                exit(1)
-
-    weekly_card = format_teams_message(week_label, employee_data)
-    print("Sending Weekly Performance Report card to Teams...")
-    if send_teams_webhook_message(WEBHOOK_URL, weekly_card):
-        print("[OK] Weekly Report card sent successfully!")
-        cards_sent += 1
     else:
-        print("ERROR: Failed to send Weekly Report card to Teams")
-        cleanup_temp_file()
-        exit(1)
+        # Normal scheduled run — existing behavior unchanged
+        print("Determining date range and reading Excel data...")
+        week_label, employee_data, prev_day_breakdown = get_cumulative_data()
 
-    print(f"\n[OK] Total cards sent: {cards_sent}")
-    cleanup_temp_file()
-    print("=" * 60)
+        if not week_label or not employee_data:
+            print("[ERROR] No data to send.")
+            cleanup_temp_file()
+            exit(1)
+
+        print(f"[OK] Report: {week_label}")
+        print(f"[OK] Employees: {len(employee_data)}")
+        if prev_day_breakdown and prev_day_breakdown["employees"]:
+            print(f"[OK] Previous Day ({prev_day_breakdown['date_label']}): {len(prev_day_breakdown['employees'])} employees")
+        print("\nVerification:")
+        for emp in employee_data:
+            print(f"  {emp['name']}: Prev Day {emp['prev_day_points']} pts (₹{emp['prev_day_amount']}) | Weekly {emp['points']} pts (₹{emp['amount']})")
+        if prev_day_breakdown and prev_day_breakdown["employees"]:
+            print(f"\nPrevious Day Breakdown ({prev_day_breakdown['date_label']}):")
+            for emp in prev_day_breakdown["employees"]:
+                print(
+                    f"  {emp['name']}: Punctuality={emp.get('Punctuality', 0)}, "
+                    f"L&D={emp.get('L&D', 0)}, Fluency Compliance={emp.get('Fluency Compliance', 0)}, "
+                    f"Innovation={emp.get('Innovation', 0)}, "
+                    f"Extraordinary Performance={emp.get('Extraordinary Performance', 0)}"
+                )
+        print()
+
+        cards_sent = 0
+
+        if prev_day_breakdown and prev_day_breakdown["employees"]:
+            prev_day_card = format_prev_day_card(prev_day_breakdown)
+            if prev_day_card:
+                print("Sending Previous Day Performance Breakdown card to Teams...")
+                if send_teams_webhook_message(WEBHOOK_URL, prev_day_card):
+                    print("[OK] Previous Day card sent successfully!")
+                    cards_sent += 1
+                else:
+                    print("ERROR: Failed to send Previous Day card to Teams")
+                    cleanup_temp_file()
+                    exit(1)
+
+        weekly_card = format_teams_message(week_label, employee_data)
+        print("Sending Weekly Performance Report card to Teams...")
+        if send_teams_webhook_message(WEBHOOK_URL, weekly_card):
+            print("[OK] Weekly Report card sent successfully!")
+            cards_sent += 1
+        else:
+            print("ERROR: Failed to send Weekly Report card to Teams")
+            cleanup_temp_file()
+            exit(1)
+
+        save_snapshot(yesterday_str, fresh_yesterday_data)
+        print(f"\n[OK] Total cards sent: {cards_sent}")
+        cleanup_temp_file()
+        print("=" * 60)
 
