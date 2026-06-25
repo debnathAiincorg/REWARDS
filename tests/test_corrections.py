@@ -115,3 +115,67 @@ def test_get_real_yesterday_data_empty_when_no_rows(tmp_path):
         result = module.get_real_yesterday_data()
 
     assert result == {}
+
+
+# ── Snapshot functions ────────────────────────────────────────────────────────
+
+def test_save_and_load_roundtrip(tmp_path):
+    data = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 1,
+                      "Innovation": 0, "Extraordinary Performance": 0}}
+    snap_file = str(tmp_path / "snap.json")
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        module.save_snapshot("2026-06-24", data)
+        result = module.load_snapshot()
+    assert result == {"date": "2026-06-24", "employees": data}
+
+
+def test_load_snapshot_returns_none_when_file_missing(tmp_path):
+    with patch.object(module, "SNAPSHOT_FILE", str(tmp_path / "missing.json")):
+        assert module.load_snapshot() is None
+
+
+def test_save_snapshot_silent_on_bad_path():
+    with patch.object(module, "SNAPSHOT_FILE", "/nonexistent_dir/snap.json"):
+        module.save_snapshot("2026-06-24", {})  # must not raise
+
+
+# ── has_yesterday_data_changed ────────────────────────────────────────────────
+
+def test_no_change_when_data_identical(tmp_path):
+    data = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 1,
+                      "Innovation": 0, "Extraordinary Performance": 0}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-24", "employees": data}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_yesterday_data_changed("2026-06-24", data)
+
+
+def test_change_detected_when_value_differs(tmp_path):
+    old = {"Alice": {"Punctuality": 0, "L&D": 0, "Fluency Compliance": 0,
+                     "Innovation": 0, "Extraordinary Performance": 0}}
+    new = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+                     "Innovation": 0, "Extraordinary Performance": 0}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-24", "employees": old}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert module.has_yesterday_data_changed("2026-06-24", new)
+
+
+def test_no_change_when_snapshot_date_differs(tmp_path):
+    snapshot_data = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+                               "Innovation": 0, "Extraordinary Performance": 0}}
+    fresh_data = {"Alice": {"Punctuality": 0, "L&D": 0, "Fluency Compliance": 0,
+                            "Innovation": 0, "Extraordinary Performance": 0}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": snapshot_data}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        # Different date means watcher fired on a new day — not a correction
+        assert not module.has_yesterday_data_changed("2026-06-24", fresh_data)
+
+
+def test_no_change_when_no_snapshot(tmp_path):
+    with patch.object(module, "SNAPSHOT_FILE", str(tmp_path / "missing.json")):
+        assert not module.has_yesterday_data_changed("2026-06-24", {"Alice": {}})

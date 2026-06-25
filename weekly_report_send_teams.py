@@ -5,6 +5,7 @@ from openpyxl import load_workbook
 from collections import defaultdict
 import os
 import time
+import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -25,6 +26,8 @@ TEMP_FILE = r"D:\sharepoint\temp_source.xlsx"
 # SharePoint API details
 SHAREPOINT_DRIVE_ID = "b!_Oj5AOOCqUa-6fnpgxmwM4Tmz3IIfOZIhM-bF3vfV8Q7o8oZ3WyrQ4ILTnuUDgHw"
 SHAREPOINT_ITEM_ID = "01EUH7IGAHNG3EYW2JJ5C37HVRDHKNUFDB"
+
+SNAPSHOT_FILE = "last_known_yesterday.json"
 
 
 def get_access_token():
@@ -434,6 +437,36 @@ def cleanup_temp_file():
             print(f"WARNING: Could not delete {f}: {e}")
     print("[OK] Cleanup done")
     return True
+
+
+def load_snapshot():
+    """Load the last-known yesterday snapshot from disk. Returns None if absent."""
+    try:
+        with open(SNAPSHOT_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        print(f"[WARNING] Could not read snapshot: {e}")
+        return None
+
+
+def save_snapshot(date_str, employees_dict):
+    """Persist yesterday's per-employee category data as the new baseline."""
+    try:
+        with open(SNAPSHOT_FILE, "w") as f:
+            json.dump({"date": date_str, "employees": employees_dict}, f, indent=2)
+        print(f"[OK] Snapshot saved for {date_str}")
+    except Exception as e:
+        print(f"[WARNING] Could not save snapshot: {e}")
+
+
+def has_yesterday_data_changed(yesterday_date_str, fresh_data):
+    """Return True only when yesterday's snapshot exists, date matches, and data differs."""
+    snapshot = load_snapshot()
+    if snapshot is None or snapshot.get("date") != yesterday_date_str:
+        return False
+    return snapshot["employees"] != fresh_data
 
 
 # MAIN EXECUTION
