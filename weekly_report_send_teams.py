@@ -179,7 +179,7 @@ def get_cumulative_data():
     date_col, name_col, category_cols, point_cols = _detect_columns(ws)
 
     if not name_col:
-        print(f"[ERROR] Could not find Name column. Headers: {headers}")
+        print(f"[ERROR] Could not find Name column in sheet '{ws.title}'.")
         return None, None, None
 
     # Get ALL unique employee names from entire sheet
