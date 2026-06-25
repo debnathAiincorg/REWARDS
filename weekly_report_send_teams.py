@@ -130,6 +130,41 @@ def _detect_columns(ws):
     return date_col, name_col, category_cols, point_cols
 
 
+def get_real_yesterday_data():
+    """Read per-employee category data for actual calendar yesterday.
+
+    Always uses today - 1 day (never weekday-adjusted).
+    Returns {employee_name: {category: int}} for rows matching yesterday's date.
+    Last occurrence wins when duplicate (name, date) rows exist.
+    """
+    yesterday_date = datetime.now().date() - timedelta(days=1)
+    wb = load_workbook(TEMP_FILE)
+    if "Daily Performance Bonus" in wb.sheetnames:
+        ws = wb["Daily Performance Bonus"]
+    else:
+        ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
+
+    date_col, name_col, category_cols, _ = _detect_columns(ws)
+    if not name_col or not date_col:
+        return {}
+
+    result = {}
+    for row in range(2, ws.max_row + 1):
+        name_val = ws.cell(row=row, column=name_col).value
+        date_val = ws.cell(row=row, column=date_col).value
+        if not name_val or not date_val:
+            continue
+        row_date = date_val.date() if hasattr(date_val, "date") else None
+        if not row_date or row_date != yesterday_date:
+            continue
+        name = str(name_val).strip()
+        result[name] = {
+            cat_name: int(ws.cell(row=row, column=col_num).value or 0)
+            for cat_name, col_num in category_cols.items()
+        }
+    return result
+
+
 def get_cumulative_data():
     """Determine date range and read cumulative data from Excel."""
     today = datetime.now().date()

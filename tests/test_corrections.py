@@ -59,3 +59,59 @@ def test_detect_columns_returns_none_for_missing_columns():
     date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
     assert date_col is None
     assert name_col is None
+
+
+# ── get_real_yesterday_data ───────────────────────────────────────────────────
+
+def test_get_real_yesterday_data_returns_only_yesterday(tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    today_dt = datetime.combine(date.today(), datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": yesterday, "name": "Alice",
+         "Punctuality": 1, "L&D": 1, "Fluency Compliance": 0,
+         "Innovation": 0, "Extraordinary Performance": 0},
+        {"date": today_dt, "name": "Alice",
+         "Punctuality": 1, "L&D": 1, "Fluency Compliance": 1,
+         "Innovation": 1, "Extraordinary Performance": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert list(result.keys()) == ["Alice"]
+    assert result["Alice"] == {
+        "Punctuality": 1, "L&D": 1, "Fluency Compliance": 0,
+        "Innovation": 0, "Extraordinary Performance": 0,
+    }
+
+
+def test_get_real_yesterday_data_deduplicates_keeps_last(tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": yesterday, "name": "Bob", "Punctuality": 0, "L&D": 0,
+         "Fluency Compliance": 0, "Innovation": 0, "Extraordinary Performance": 0},
+        {"date": yesterday, "name": "Bob", "Punctuality": 1, "L&D": 1,
+         "Fluency Compliance": 1, "Innovation": 1, "Extraordinary Performance": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert result["Bob"]["Punctuality"] == 1
+
+
+def test_get_real_yesterday_data_empty_when_no_rows(tmp_path):
+    wb = make_test_workbook([])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert result == {}
