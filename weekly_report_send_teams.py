@@ -100,6 +100,36 @@ def download_source_file():
     return False
 
 
+def _detect_columns(ws):
+    """Return (date_col, name_col, category_cols, point_cols) from header row.
+
+    All indices are 1-based. date_col and name_col are None if not found.
+    category_cols maps category name → column index for the five bonus categories.
+    point_cols lists every non-date, non-name, non-index scoring column.
+    """
+    headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
+    date_col = name_col = None
+    point_cols = []
+    category_cols = {}
+    for i, h in enumerate(headers):
+        if not h:
+            continue
+        hl = str(h).strip().lower()
+        if hl == "date":
+            date_col = i + 1
+        elif hl == "name":
+            name_col = i + 1
+        elif hl != "index":
+            point_cols.append(i + 1)
+            h_clean = str(h).strip()
+            if h_clean in [
+                "Punctuality", "L&D", "Fluency Compliance",
+                "Innovation", "Extraordinary Performance",
+            ]:
+                category_cols[h_clean] = i + 1
+    return date_col, name_col, category_cols, point_cols
+
+
 def get_cumulative_data():
     """Determine date range and read cumulative data from Excel."""
     today = datetime.now().date()
@@ -146,23 +176,7 @@ def get_cumulative_data():
         ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
 
     # Detect columns from row 1
-    headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
-    date_col = name_col = None
-    point_cols = []
-    category_cols = {}
-    for i, h in enumerate(headers):
-        if not h:
-            continue
-        hl = str(h).strip().lower()
-        if hl == "date":
-            date_col = i + 1
-        elif hl == "name":
-            name_col = i + 1
-        elif hl != "index":
-            point_cols.append(i + 1)
-            h_clean = str(h).strip()
-            if h_clean in ["Punctuality", "L&D", "Fluency Compliance", "Innovation", "Extraordinary Performance"]:
-                category_cols[h_clean] = i + 1
+    date_col, name_col, category_cols, point_cols = _detect_columns(ws)
 
     if not name_col:
         print(f"[ERROR] Could not find Name column. Headers: {headers}")
