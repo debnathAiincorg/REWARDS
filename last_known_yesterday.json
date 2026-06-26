@@ -1,5 +1,5 @@
 {
-  "date": "2026-06-24",
+  "date": "2026-06-25",
   "employees": {
     "Pradip Ray": {
       "Punctuality": 1,
@@ -10,7 +10,7 @@
     },
     "Srijan Banerjee": {
       "Punctuality": 0,
-      "L&D": 0,
+      "L&D": 1,
       "Fluency Compliance": 0,
       "Innovation": 0,
       "Extraordinary Performance": 0
@@ -37,7 +37,7 @@
       "Extraordinary Performance": 0
     },
     "Pratim Rath": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Fluency Compliance": 0,
       "Innovation": 0,
@@ -55,7 +55,7 @@
       "L&D": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
-      "Extraordinary Performance": 5
+      "Extraordinary Performance": 0
     },
     "Debnath Paul": {
       "Punctuality": 1,
