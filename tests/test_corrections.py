@@ -179,3 +179,71 @@ def test_no_change_when_snapshot_date_differs(tmp_path):
 def test_no_change_when_no_snapshot(tmp_path):
     with patch.object(module, "SNAPSHOT_FILE", str(tmp_path / "missing.json")):
         assert not module.has_yesterday_data_changed("2026-06-24", {"Alice": {}})
+
+
+# ── Dynamic column detection ──────────────────────────────────────────────────
+
+CATEGORIES_PLUS = CATEGORIES + ["Teamwork"]
+
+
+def make_test_workbook_extra(rows):
+    """Like make_test_workbook but with an extra 'Teamwork' column."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Performance Bonus"
+    headers = ["Index", "Date", "Name"] + CATEGORIES_PLUS
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    for r, row in enumerate(rows, 2):
+        ws.cell(row=r, column=1, value=r - 1)
+        ws.cell(row=r, column=2, value=row["date"])
+        ws.cell(row=r, column=3, value=row["name"])
+        for col, cat in enumerate(CATEGORIES_PLUS, 4):
+            ws.cell(row=r, column=col, value=row.get(cat, 0))
+    return wb
+
+
+def test_detect_columns_includes_extra_column():
+    wb = make_test_workbook_extra([])
+    ws = wb["Daily Performance Bonus"]
+    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    assert "Teamwork" in category_cols
+    assert category_cols["Teamwork"] == 9  # 9th column: Index, Date, Name + 5 + Teamwork
+    assert sorted(point_cols) == [4, 5, 6, 7, 8, 9]
+
+
+def test_get_real_yesterday_data_includes_extra_column(tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook_extra([
+        {"date": yesterday, "name": "Carol",
+         "Punctuality": 1, "L&D": 0, "Fluency Compliance": 1,
+         "Innovation": 0, "Extraordinary Performance": 0, "Teamwork": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert "Carol" in result
+    assert result["Carol"]["Teamwork"] == 1
+
+
+def test_format_prev_day_card_includes_extra_category():
+    prev_day_breakdown = {
+        "date_label": "Jun 26",
+        "employees": [
+            {"name": "Alice", "Punctuality": 1, "L&D": 0, "Fluency Compliance": 1,
+             "Innovation": 0, "Extraordinary Performance": 0, "Teamwork": 1},
+        ]
+    }
+    card = module.format_prev_day_card(prev_day_breakdown)
+    assert card is not None
+
+    # The header ColumnSet is the third element in body (index 2)
+    header_columnset = card["body"][2]
+    header_texts = [
+        col["items"][0]["text"]
+        for col in header_columnset["columns"]
+    ]
+    assert "Teamwork" in header_texts

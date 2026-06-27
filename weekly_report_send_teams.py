@@ -125,11 +125,7 @@ def _detect_columns(ws):
         elif hl != "index":
             point_cols.append(i + 1)
             h_clean = str(h).strip()
-            if h_clean in [
-                "Punctuality", "L&D", "Fluency Compliance",
-                "Innovation", "Extraordinary Performance",
-            ]:
-                category_cols[h_clean] = i + 1
+            category_cols[h_clean] = i + 1
     return date_col, name_col, category_cols, point_cols
 
 
@@ -308,37 +304,29 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
     if not prev_day_breakdown or not prev_day_breakdown["employees"]:
         return None
 
+    categories = [k for k in prev_day_breakdown["employees"][0].keys() if k != "name"]
+
+    header_columns = [
+        {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]}
+    ] + [
+        {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": cat, "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]}
+        for cat in categories
+    ]
+
     body = [
         {"type": "TextBlock", "text": f"{title_prefix}Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": f"Date: {prev_day_breakdown['date_label']}", "weight": "Normal", "size": "Medium", "spacing": "None", "wrap": True},
-        {
-            "type": "ColumnSet",
-            "separator": True,
-            "columns": [
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Punctuality", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "L&D", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Fluency Compliance", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Innovation", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Extraordinary Performance", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]}
-            ]
-        }
+        {"type": "ColumnSet", "separator": True, "columns": header_columns}
     ]
 
     for emp in prev_day_breakdown["employees"]:
-        body.append({
-            "type": "ColumnSet",
-            "separator": True,
-            "style": "default",
-            "columns": [
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp["name"]), "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Punctuality", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("L&D", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Fluency Compliance", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Innovation", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Extraordinary Performance", 0)), "horizontalAlignment": "Center", "wrap": True}]}
-            ]
-        })
+        row_columns = [
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp["name"]), "wrap": True}]}
+        ] + [
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get(cat, 0)), "horizontalAlignment": "Center", "wrap": True}]}
+            for cat in categories
+        ]
+        body.append({"type": "ColumnSet", "separator": True, "style": "default", "columns": row_columns})
 
     return {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
