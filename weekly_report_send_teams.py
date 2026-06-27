@@ -5,6 +5,7 @@ from openpyxl import load_workbook
 from collections import defaultdict
 import os
 import time
+import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -25,6 +26,8 @@ TEMP_FILE = r"D:\sharepoint\temp_source.xlsx"
 # SharePoint API details
 SHAREPOINT_DRIVE_ID = "b!_Oj5AOOCqUa-6fnpgxmwM4Tmz3IIfOZIhM-bF3vfV8Q7o8oZ3WyrQ4ILTnuUDgHw"
 SHAREPOINT_ITEM_ID = "01EUH7IGAHNG3EYW2JJ5C37HVRDHKNUFDB"
+
+SNAPSHOT_FILE = "last_known_yesterday.json"
 
 
 def get_access_token():
@@ -100,6 +103,67 @@ def download_source_file():
     return False
 
 
+def _detect_columns(ws):
+    """Return (date_col, name_col, category_cols, point_cols) from header row.
+
+    All indices are 1-based. date_col and name_col are None if not found.
+    category_cols maps category name → column index for the five bonus categories.
+    point_cols lists every non-date, non-name, non-index scoring column.
+    """
+    headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
+    date_col = name_col = None
+    point_cols = []
+    category_cols = {}
+    for i, h in enumerate(headers):
+        if not h:
+            continue
+        hl = str(h).strip().lower()
+        if hl == "date":
+            date_col = i + 1
+        elif hl == "name":
+            name_col = i + 1
+        elif hl != "index":
+            point_cols.append(i + 1)
+            h_clean = str(h).strip()
+            category_cols[h_clean] = i + 1
+    return date_col, name_col, category_cols, point_cols
+
+
+def get_real_yesterday_data():
+    """Read per-employee category data for actual calendar yesterday.
+
+    Always uses today - 1 day (never weekday-adjusted).
+    Returns {employee_name: {category: int}} for rows matching yesterday's date.
+    Last occurrence wins when duplicate (name, date) rows exist.
+    """
+    yesterday_date = datetime.now().date() - timedelta(days=1)
+    wb = load_workbook(TEMP_FILE)
+    if "Daily Performance Bonus" in wb.sheetnames:
+        ws = wb["Daily Performance Bonus"]
+    else:
+        ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
+
+    date_col, name_col, category_cols, _ = _detect_columns(ws)
+    if not name_col or not date_col:
+        return {}
+
+    result = {}
+    for row in range(2, ws.max_row + 1):
+        name_val = ws.cell(row=row, column=name_col).value
+        date_val = ws.cell(row=row, column=date_col).value
+        if not name_val or not date_val:
+            continue
+        row_date = date_val.date() if hasattr(date_val, "date") else None
+        if not row_date or row_date != yesterday_date:
+            continue
+        name = str(name_val).strip()
+        result[name] = {
+            cat_name: int(ws.cell(row=row, column=col_num).value or 0)
+            for cat_name, col_num in category_cols.items()
+        }
+    return result
+
+
 def get_cumulative_data():
     """Determine date range and read cumulative data from Excel."""
     today = datetime.now().date()
@@ -146,26 +210,10 @@ def get_cumulative_data():
         ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
 
     # Detect columns from row 1
-    headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
-    date_col = name_col = None
-    point_cols = []
-    category_cols = {}
-    for i, h in enumerate(headers):
-        if not h:
-            continue
-        hl = str(h).strip().lower()
-        if hl == "date":
-            date_col = i + 1
-        elif hl == "name":
-            name_col = i + 1
-        elif hl != "index":
-            point_cols.append(i + 1)
-            h_clean = str(h).strip()
-            if h_clean in ["Punctuality", "L&D", "Fluency Compliance", "Innovation", "Extraordinary Performance"]:
-                category_cols[h_clean] = i + 1
+    date_col, name_col, category_cols, point_cols = _detect_columns(ws)
 
     if not name_col:
-        print(f"[ERROR] Could not find Name column. Headers: {headers}")
+        print(f"[ERROR] Could not find Name column in sheet '{ws.title}'.")
         return None, None, None
 
     # Get ALL unique employee names from entire sheet
@@ -251,42 +299,34 @@ def get_cumulative_data():
     return week_label, employees, prev_day_breakdown_data
 
 
-def format_prev_day_card(prev_day_breakdown):
+def format_prev_day_card(prev_day_breakdown, title_prefix=""):
     """Build standalone Adaptive Card for previous day performance breakdown."""
     if not prev_day_breakdown or not prev_day_breakdown["employees"]:
         return None
 
+    categories = [k for k in prev_day_breakdown["employees"][0].keys() if k != "name"]
+
+    header_columns = [
+        {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]}
+    ] + [
+        {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": cat, "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]}
+        for cat in categories
+    ]
+
     body = [
-        {"type": "TextBlock", "text": "Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": f"{title_prefix}Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": f"Date: {prev_day_breakdown['date_label']}", "weight": "Normal", "size": "Medium", "spacing": "None", "wrap": True},
-        {
-            "type": "ColumnSet",
-            "separator": True,
-            "columns": [
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Punctuality", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "L&D", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Fluency Compliance", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Innovation", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Extraordinary Performance", "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]}
-            ]
-        }
+        {"type": "ColumnSet", "separator": True, "columns": header_columns}
     ]
 
     for emp in prev_day_breakdown["employees"]:
-        body.append({
-            "type": "ColumnSet",
-            "separator": True,
-            "style": "default",
-            "columns": [
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp["name"]), "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Punctuality", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("L&D", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Fluency Compliance", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Innovation", 0)), "horizontalAlignment": "Center", "wrap": True}]},
-                {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get("Extraordinary Performance", 0)), "horizontalAlignment": "Center", "wrap": True}]}
-            ]
-        })
+        row_columns = [
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp["name"]), "wrap": True}]}
+        ] + [
+            {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get(cat, 0)), "horizontalAlignment": "Center", "wrap": True}]}
+            for cat in categories
+        ]
+        body.append({"type": "ColumnSet", "separator": True, "style": "default", "columns": row_columns})
 
     return {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -296,9 +336,9 @@ def format_prev_day_card(prev_day_breakdown):
     }
 
 
-def format_teams_message(week_label, employees):
+def format_teams_message(week_label, employees, title_prefix=""):
     body = [
-        {"type": "TextBlock", "text": "Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": f"{title_prefix}Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": week_label, "weight": "Bolder", "size": "Medium", "spacing": "None", "wrap": True},
         {
             "type": "ColumnSet",
@@ -387,6 +427,36 @@ def cleanup_temp_file():
     return True
 
 
+def load_snapshot():
+    """Load the last-known yesterday snapshot from disk. Returns None if absent."""
+    try:
+        with open(SNAPSHOT_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        print(f"[WARNING] Could not read snapshot: {e}")
+        return None
+
+
+def save_snapshot(date_str, employees_dict):
+    """Persist yesterday's per-employee category data as the new baseline."""
+    try:
+        with open(SNAPSHOT_FILE, "w") as f:
+            json.dump({"date": date_str, "employees": employees_dict}, f, indent=2)
+        print(f"[OK] Snapshot saved for {date_str}")
+    except Exception as e:
+        print(f"[WARNING] Could not save snapshot: {e}")
+
+
+def has_yesterday_data_changed(yesterday_date_str, fresh_data):
+    """Return True only when yesterday's snapshot exists, date matches, and data differs."""
+    snapshot = load_snapshot()
+    if snapshot is None or snapshot.get("date") != yesterday_date_str:
+        return False
+    return snapshot["employees"] != fresh_data
+
+
 # MAIN EXECUTION
 if __name__ == "__main__":
     print("=" * 60)
@@ -395,6 +465,32 @@ if __name__ == "__main__":
 
     if not download_source_file():
         exit(1)
+
+    yesterday_date = datetime.now().date() - timedelta(days=1)
+    yesterday_str = yesterday_date.isoformat()
+    fresh_yesterday_data = get_real_yesterday_data()
+
+    snapshot = load_snapshot()
+
+    if snapshot is None:
+        changed = True
+        is_correction = False
+    elif snapshot["date"] != yesterday_str:
+        changed = True
+        is_correction = False
+    elif snapshot["employees"] != fresh_yesterday_data:
+        changed = True
+        is_correction = True
+    else:
+        changed = False
+        is_correction = False
+
+    if not changed:
+        print("[INFO] No change detected since last check. Exiting silently.")
+        cleanup_temp_file()
+        exit(0)
+
+    title_prefix = "🔧 Corrected Report - " if is_correction else ""
 
     print("Determining date range and reading Excel data...")
     week_label, employee_data, prev_day_breakdown = get_cumulative_data()
@@ -414,33 +510,39 @@ if __name__ == "__main__":
     if prev_day_breakdown and prev_day_breakdown["employees"]:
         print(f"\nPrevious Day Breakdown ({prev_day_breakdown['date_label']}):")
         for emp in prev_day_breakdown["employees"]:
-            print(f"  {emp['name']}: Punctuality={emp.get('Punctuality', 0)}, L&D={emp.get('L&D', 0)}, Fluency Compliance={emp.get('Fluency Compliance', 0)}, Innovation={emp.get('Innovation', 0)}, Extraordinary Performance={emp.get('Extraordinary Performance', 0)}")
+            print(
+                f"  {emp['name']}: Punctuality={emp.get('Punctuality', 0)}, "
+                f"L&D={emp.get('L&D', 0)}, Fluency Compliance={emp.get('Fluency Compliance', 0)}, "
+                f"Innovation={emp.get('Innovation', 0)}, "
+                f"Extraordinary Performance={emp.get('Extraordinary Performance', 0)}"
+            )
     print()
 
     cards_sent = 0
 
     if prev_day_breakdown and prev_day_breakdown["employees"]:
-        prev_day_card = format_prev_day_card(prev_day_breakdown)
+        prev_day_card = format_prev_day_card(prev_day_breakdown, title_prefix=title_prefix)
         if prev_day_card:
             print("Sending Previous Day Performance Breakdown card to Teams...")
             if send_teams_webhook_message(WEBHOOK_URL, prev_day_card):
                 print("[OK] Previous Day card sent successfully!")
                 cards_sent += 1
             else:
-                print("ERROR: Failed to send Previous Day card to Teams")
+                print("[ERROR] Failed to send Previous Day card to Teams")
                 cleanup_temp_file()
                 exit(1)
 
-    weekly_card = format_teams_message(week_label, employee_data)
+    weekly_card = format_teams_message(week_label, employee_data, title_prefix=title_prefix)
     print("Sending Weekly Performance Report card to Teams...")
     if send_teams_webhook_message(WEBHOOK_URL, weekly_card):
         print("[OK] Weekly Report card sent successfully!")
         cards_sent += 1
     else:
-        print("ERROR: Failed to send Weekly Report card to Teams")
+        print("[ERROR] Failed to send Weekly Report card to Teams")
         cleanup_temp_file()
         exit(1)
 
+    save_snapshot(yesterday_str, fresh_yesterday_data)
     print(f"\n[OK] Total cards sent: {cards_sent}")
     cleanup_temp_file()
     print("=" * 60)
