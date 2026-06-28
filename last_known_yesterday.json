@@ -1,5 +1,5 @@
 {
-  "date": "2026-06-26",
+  "date": "2026-06-27",
   "employees": {
     "Pradip Ray": {
       "Punctuality": 1,
@@ -7,7 +7,7 @@
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
-      "Extraordinary Performance": 5
+      "Extraordinary Performance": 2
     },
     "Srijan Banerjee": {
       "Punctuality": 0,
@@ -47,7 +47,7 @@
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
-      "Extraordinary Performance": 2
+      "Extraordinary Performance": 0
     },
     "Rahul Paul": {
       "Punctuality": 1,
@@ -58,7 +58,7 @@
       "Extraordinary Performance": 0
     },
     "Monirul Molla": {
-      "Punctuality": 0,
+      "Punctuality": 1,
       "L&D": 0,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
