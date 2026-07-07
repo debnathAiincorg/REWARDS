@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load .env file if it exists
-load_dotenv(r"D:\SHAREPOINT\.env")
+load_dotenv()
 
 # Load credentials from environment variables (Azure App Registration)
 AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
@@ -103,12 +103,17 @@ def download_source_file():
     return False
 
 
+# Header names (case-insensitive) that are never point/category columns,
+# beyond Date/Name which are handled separately.
+NON_POINT_COLUMNS = {"index", "notes"}
+
+
 def _detect_columns(ws):
     """Return (date_col, name_col, category_cols, point_cols) from header row.
 
     All indices are 1-based. date_col and name_col are None if not found.
     category_cols maps category name → column index for the five bonus categories.
-    point_cols lists every non-date, non-name, non-index scoring column.
+    point_cols lists every non-date, non-name, non-index, non-free-text scoring column.
     """
     headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
     date_col = name_col = None
@@ -122,11 +127,27 @@ def _detect_columns(ws):
             date_col = i + 1
         elif hl == "name":
             name_col = i + 1
-        elif hl != "index":
+        elif hl not in NON_POINT_COLUMNS:
             point_cols.append(i + 1)
             h_clean = str(h).strip()
             category_cols[h_clean] = i + 1
     return date_col, name_col, category_cols, point_cols
+
+
+def _safe_int(value, context=""):
+    """Convert value to int, tolerating stray non-numeric cell values.
+
+    Returns 0 for None/empty. On a non-numeric value, prints a warning
+    (including context, e.g. row/employee/category) and returns 0 instead
+    of crashing the whole report.
+    """
+    if not value:
+        return 0
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        print(f"[WARNING] Non-numeric value in point column ({context}): {value!r} — treated as 0")
+        return 0
 
 
 def get_real_yesterday_data():
@@ -158,7 +179,10 @@ def get_real_yesterday_data():
             continue
         name = str(name_val).strip()
         result[name] = {
-            cat_name: int(ws.cell(row=row, column=col_num).value or 0)
+            cat_name: _safe_int(
+                ws.cell(row=row, column=col_num).value,
+                context=f"row {row}, {name}, {cat_name}",
+            )
             for cat_name, col_num in category_cols.items()
         }
     return result
@@ -244,8 +268,11 @@ def get_cumulative_data():
             row_date = date_val.date() if hasattr(date_val, 'date') else None
             if not row_date:
                 continue
-            pts = sum(int(ws.cell(row=row, column=c).value or 0) for c in point_cols)
             name = str(name_val).strip()
+            pts = sum(
+                _safe_int(ws.cell(row=row, column=c).value, context=f"row {row}, {name}")
+                for c in point_cols
+            )
             key = (name, row_date)
             if key in row_data:
                 print(f"[WARNING] Duplicate entry found for {name} on {row_date} — using last occurrence, please check source file")
@@ -255,7 +282,7 @@ def get_cumulative_data():
                 category_values = {}
                 for cat_name, col_num in category_cols.items():
                     val = ws.cell(row=row, column=col_num).value
-                    category_values[cat_name] = int(val or 0)
+                    category_values[cat_name] = _safe_int(val, context=f"row {row}, {name}, {cat_name}")
                 prev_day_breakdown[key] = category_values
 
     # Calculate weekly and previous-day totals from deduplicated data

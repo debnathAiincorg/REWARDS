@@ -229,6 +229,135 @@ def test_get_real_yesterday_data_includes_extra_column(tmp_path):
     assert result["Carol"]["Teamwork"] == 1
 
 
+# ── Notes / free-text column exclusion ────────────────────────────────────────
+
+def make_test_workbook_with_notes(rows):
+    """Like make_test_workbook but with an extra free-text 'Notes' column."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Performance Bonus"
+    headers = ["Index", "Date", "Name"] + CATEGORIES + ["Notes"]
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    for r, row in enumerate(rows, 2):
+        ws.cell(row=r, column=1, value=r - 1)
+        ws.cell(row=r, column=2, value=row["date"])
+        ws.cell(row=r, column=3, value=row["name"])
+        for col, cat in enumerate(CATEGORIES, 4):
+            ws.cell(row=r, column=col, value=row.get(cat, 0))
+        ws.cell(row=r, column=len(headers), value=row.get("Notes", ""))
+    return wb
+
+
+def test_detect_columns_excludes_notes_column():
+    wb = make_test_workbook_with_notes([])
+    ws = wb["Daily Performance Bonus"]
+    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    assert "Notes" not in category_cols
+    assert sorted(point_cols) == [4, 5, 6, 7, 8]  # Notes column (9) excluded
+
+
+def test_detect_columns_excludes_notes_case_insensitive():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Performance Bonus"
+    headers = ["Index", "Date", "Name"] + CATEGORIES + ["NOTES"]
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    assert "NOTES" not in category_cols
+    assert sorted(point_cols) == [4, 5, 6, 7, 8]
+
+
+def test_get_cumulative_data_ignores_notes_column_text(tmp_path):
+    """A free-text Notes column with a value like 'Washroom work+ Ticket' must
+    not crash get_cumulative_data — it should simply be excluded as a point column."""
+    yesterday_dt = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook_with_notes([
+        {"date": yesterday_dt, "name": "Dave",
+         "Punctuality": 1, "L&D": 1, "Fluency Compliance": 1,
+         "Innovation": 0, "Extraordinary Performance": 0,
+         "Notes": "Washroom work+ Ticket"},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    assert week_label is not None
+    dave = next(e for e in employees if e["name"] == "Dave")
+    assert dave["points"] == 3
+
+
+# ── _safe_int defense-in-depth ────────────────────────────────────────────────
+
+def test_safe_int_returns_zero_for_none_and_empty():
+    assert module._safe_int(None) == 0
+    assert module._safe_int("") == 0
+
+
+def test_safe_int_converts_valid_numbers():
+    assert module._safe_int(5) == 5
+    assert module._safe_int("3") == 3
+
+
+def test_safe_int_returns_zero_and_warns_on_bad_value(capsys):
+    result = module._safe_int("Washroom work+ Ticket", context="row 2, Dave, Punctuality")
+    assert result == 0
+    captured = capsys.readouterr()
+    assert "[WARNING]" in captured.out
+    assert "Washroom work+ Ticket" in captured.out
+    assert "row 2, Dave, Punctuality" in captured.out
+
+
+def test_get_cumulative_data_stray_text_in_point_column_treated_as_zero(capsys, tmp_path):
+    """If a point column somehow contains stray text (not caught by column
+    exclusion), the script must not crash and should treat it as 0 with a warning."""
+    yesterday_dt = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook([
+        {"date": yesterday_dt, "name": "Erin",
+         "Punctuality": 1, "L&D": 1, "Fluency Compliance": 0,
+         "Innovation": 0, "Extraordinary Performance": 0},
+    ])
+    ws = wb["Daily Performance Bonus"]
+    # Corrupt a point column cell with free text, simulating misentered data.
+    ws.cell(row=2, column=6, value="Washroom work+ Ticket")  # Fluency Compliance column
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    erin = next(e for e in employees if e["name"] == "Erin")
+    assert erin["points"] == 2  # Punctuality(1) + L&D(1) + Fluency Compliance(treated as 0)
+
+    captured = capsys.readouterr()
+    assert "[WARNING]" in captured.out
+    assert "Washroom work+ Ticket" in captured.out
+
+
+def test_get_real_yesterday_data_stray_text_treated_as_zero(capsys, tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook([
+        {"date": yesterday, "name": "Frank",
+         "Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+         "Innovation": 0, "Extraordinary Performance": 0},
+    ])
+    ws = wb["Daily Performance Bonus"]
+    ws.cell(row=2, column=5, value="stray text")  # L&D column
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert result["Frank"]["L&D"] == 0
+    captured = capsys.readouterr()
+    assert "[WARNING]" in captured.out
+    assert "stray text" in captured.out
+
+
 def test_format_prev_day_card_includes_extra_category():
     prev_day_breakdown = {
         "date_label": "Jun 26",
