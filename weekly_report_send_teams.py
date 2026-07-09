@@ -104,19 +104,20 @@ def download_source_file():
 
 
 # Header names (case-insensitive) that are never point/category columns,
-# beyond Date/Name which are handled separately.
-NON_POINT_COLUMNS = {"index", "notes"}
+# beyond Date/Name/Notes which are handled separately.
+NON_POINT_COLUMNS = {"index"}
 
 
 def _detect_columns(ws):
-    """Return (date_col, name_col, category_cols, point_cols) from header row.
+    """Return (date_col, name_col, category_cols, point_cols, notes_col) from header row.
 
-    All indices are 1-based. date_col and name_col are None if not found.
+    All indices are 1-based. date_col, name_col, and notes_col are None if not found.
     category_cols maps category name → column index for the five bonus categories.
     point_cols lists every non-date, non-name, non-index, non-free-text scoring column.
+    notes_col is the free-text "Notes" column, kept separate from the numeric columns.
     """
     headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
-    date_col = name_col = None
+    date_col = name_col = notes_col = None
     point_cols = []
     category_cols = {}
     for i, h in enumerate(headers):
@@ -127,11 +128,13 @@ def _detect_columns(ws):
             date_col = i + 1
         elif hl == "name":
             name_col = i + 1
+        elif hl == "notes":
+            notes_col = i + 1
         elif hl not in NON_POINT_COLUMNS:
             point_cols.append(i + 1)
             h_clean = str(h).strip()
             category_cols[h_clean] = i + 1
-    return date_col, name_col, category_cols, point_cols
+    return date_col, name_col, category_cols, point_cols, notes_col
 
 
 def _safe_int(value, context=""):
@@ -164,7 +167,7 @@ def get_real_yesterday_data():
     else:
         ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
 
-    date_col, name_col, category_cols, _ = _detect_columns(ws)
+    date_col, name_col, category_cols, _, _ = _detect_columns(ws)
     if not name_col or not date_col:
         return {}
 
@@ -234,7 +237,7 @@ def get_cumulative_data():
         ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
 
     # Detect columns from row 1
-    date_col, name_col, category_cols, point_cols = _detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = _detect_columns(ws)
 
     if not name_col:
         print(f"[ERROR] Could not find Name column in sheet '{ws.title}'.")
@@ -283,6 +286,8 @@ def get_cumulative_data():
                 for cat_name, col_num in category_cols.items():
                     val = ws.cell(row=row, column=col_num).value
                     category_values[cat_name] = _safe_int(val, context=f"row {row}, {name}, {cat_name}")
+                notes_val = ws.cell(row=row, column=notes_col).value if notes_col else None
+                category_values["Notes"] = str(notes_val).strip() if notes_val else ""
                 prev_day_breakdown[key] = category_values
 
     # Calculate weekly and previous-day totals from deduplicated data
@@ -311,6 +316,7 @@ def get_cumulative_data():
         for emp_name in all_names:
             if emp_name not in names_in_breakdown:
                 zero_categories = {cat: 0 for cat in category_cols.keys()}
+                zero_categories["Notes"] = ""
                 prev_day_employees.append({
                     "name": emp_name,
                     **zero_categories
@@ -331,7 +337,9 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
     if not prev_day_breakdown or not prev_day_breakdown["employees"]:
         return None
 
-    categories = [k for k in prev_day_breakdown["employees"][0].keys() if k != "name"]
+    first_emp = prev_day_breakdown["employees"][0]
+    has_notes = "Notes" in first_emp
+    categories = [k for k in first_emp.keys() if k not in ("name", "Notes")]
 
     header_columns = [
         {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": "Name", "weight": "Bolder", "wrap": True}]}
@@ -339,6 +347,10 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
         {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": cat, "weight": "Bolder", "horizontalAlignment": "Center", "wrap": True}]}
         for cat in categories
     ]
+    if has_notes:
+        header_columns.append(
+            {"type": "Column", "width": "4", "items": [{"type": "TextBlock", "text": "Notes", "weight": "Bolder", "wrap": True}]}
+        )
 
     body = [
         {"type": "TextBlock", "text": f"{title_prefix}Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
@@ -353,6 +365,10 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
             {"type": "Column", "width": "2", "items": [{"type": "TextBlock", "text": str(emp.get(cat, 0)), "horizontalAlignment": "Center", "wrap": True}]}
             for cat in categories
         ]
+        if has_notes:
+            row_columns.append(
+                {"type": "Column", "width": "4", "items": [{"type": "TextBlock", "text": str(emp.get("Notes", "")), "wrap": True}]}
+            )
         body.append({"type": "ColumnSet", "separator": True, "style": "default", "columns": row_columns})
 
     return {

@@ -42,7 +42,7 @@ def make_test_workbook(rows):
 def test_detect_columns_identifies_all_columns():
     wb = make_test_workbook([])
     ws = wb["Daily Performance Bonus"]
-    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = module._detect_columns(ws)
     assert date_col == 2
     assert name_col == 3
     assert category_cols == {
@@ -50,15 +50,17 @@ def test_detect_columns_identifies_all_columns():
         "Innovation": 7, "Extraordinary Performance": 8,
     }
     assert sorted(point_cols) == [4, 5, 6, 7, 8]
+    assert notes_col is None
 
 
 def test_detect_columns_returns_none_for_missing_columns():
     wb = Workbook()
     ws = wb.active
     ws.cell(row=1, column=1, value="Index")
-    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = module._detect_columns(ws)
     assert date_col is None
     assert name_col is None
+    assert notes_col is None
 
 
 # ── get_real_yesterday_data ───────────────────────────────────────────────────
@@ -206,7 +208,7 @@ def make_test_workbook_extra(rows):
 def test_detect_columns_includes_extra_column():
     wb = make_test_workbook_extra([])
     ws = wb["Daily Performance Bonus"]
-    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = module._detect_columns(ws)
     assert "Teamwork" in category_cols
     assert category_cols["Teamwork"] == 9  # 9th column: Index, Date, Name + 5 + Teamwork
     assert sorted(point_cols) == [4, 5, 6, 7, 8, 9]
@@ -252,9 +254,10 @@ def make_test_workbook_with_notes(rows):
 def test_detect_columns_excludes_notes_column():
     wb = make_test_workbook_with_notes([])
     ws = wb["Daily Performance Bonus"]
-    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = module._detect_columns(ws)
     assert "Notes" not in category_cols
     assert sorted(point_cols) == [4, 5, 6, 7, 8]  # Notes column (9) excluded
+    assert notes_col == 9
 
 
 def test_detect_columns_excludes_notes_case_insensitive():
@@ -264,9 +267,10 @@ def test_detect_columns_excludes_notes_case_insensitive():
     headers = ["Index", "Date", "Name"] + CATEGORIES + ["NOTES"]
     for col, h in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=h)
-    date_col, name_col, category_cols, point_cols = module._detect_columns(ws)
+    date_col, name_col, category_cols, point_cols, notes_col = module._detect_columns(ws)
     assert "NOTES" not in category_cols
     assert sorted(point_cols) == [4, 5, 6, 7, 8]
+    assert notes_col == 9
 
 
 def test_get_cumulative_data_ignores_notes_column_text(tmp_path):
@@ -288,6 +292,46 @@ def test_get_cumulative_data_ignores_notes_column_text(tmp_path):
     assert week_label is not None
     dave = next(e for e in employees if e["name"] == "Dave")
     assert dave["points"] == 3
+
+
+def test_get_real_yesterday_data_ignores_notes_column_text(tmp_path):
+    """A free-text Notes column must not crash get_real_yesterday_data, and the
+    returned per-category dict must not include Notes (numeric-only snapshot)."""
+    yesterday_dt = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook_with_notes([
+        {"date": yesterday_dt, "name": "Gail",
+         "Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+         "Innovation": 0, "Extraordinary Performance": 0,
+         "Notes": "Washroom work+ Ticket"},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_real_yesterday_data()
+
+    assert "Notes" not in result["Gail"]
+    assert result["Gail"]["Punctuality"] == 1
+
+
+def test_get_cumulative_data_notes_text_included_in_prev_day_breakdown(tmp_path):
+    """Notes text should be captured verbatim per employee in the previous-day
+    breakdown, not summed or dropped."""
+    yesterday_dt = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook_with_notes([
+        {"date": yesterday_dt, "name": "Heidi",
+         "Punctuality": 1, "L&D": 1, "Fluency Compliance": 1,
+         "Innovation": 0, "Extraordinary Performance": 0,
+         "Notes": "Washroom work+ Ticket"},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    heidi = next(e for e in prev_day_breakdown["employees"] if e["name"] == "Heidi")
+    assert heidi["Notes"] == "Washroom work+ Ticket"
 
 
 # ── _safe_int defense-in-depth ────────────────────────────────────────────────
@@ -376,3 +420,32 @@ def test_format_prev_day_card_includes_extra_category():
         for col in header_columnset["columns"]
     ]
     assert "Teamwork" in header_texts
+
+
+def test_format_prev_day_card_renders_notes_column():
+    prev_day_breakdown = {
+        "date_label": "Jun 26",
+        "employees": [
+            {"name": "Alice", "Punctuality": 1, "L&D": 0, "Fluency Compliance": 1,
+             "Innovation": 0, "Extraordinary Performance": 0,
+             "Notes": "Washroom work+ Ticket"},
+        ]
+    }
+    card = module.format_prev_day_card(prev_day_breakdown)
+    assert card is not None
+
+    header_columnset = card["body"][2]
+    header_columns = header_columnset["columns"]
+    header_texts = [col["items"][0]["text"] for col in header_columns]
+    assert header_texts[-1] == "Notes"
+
+    notes_header_col = header_columns[-1]
+    assert "horizontalAlignment" not in notes_header_col["items"][0]
+
+    row_columnset = card["body"][3]
+    row_columns = row_columnset["columns"]
+    notes_col = row_columns[-1]
+    notes_item = notes_col["items"][0]
+    assert notes_item["text"] == "Washroom work+ Ticket"
+    assert notes_item["wrap"] is True
+    assert "horizontalAlignment" not in notes_item
