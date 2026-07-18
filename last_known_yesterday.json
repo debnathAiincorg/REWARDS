@@ -1,5 +1,5 @@
 {
-  "date": "2026-07-16",
+  "date": "2026-07-17",
   "employees": {
     "Pradip Ray": {
       "Punctuality": 1,
@@ -62,8 +62,8 @@
       "L&D": 0,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
-      "Innovation": 2,
-      "Extraordinary Performance": 0
+      "Innovation": 0,
+      "Extraordinary Performance": 2
     },
     "Debnath Paul": {
       "Punctuality": 1,
