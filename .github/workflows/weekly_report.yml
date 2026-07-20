@@ -1,8 +1,6 @@
 name: Weekly Performance Report
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [weekly_report]
 
 permissions:
   contents: write
@@ -22,7 +20,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          TRIGGER_SOURCE: ${{ github.event.client_payload.source }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: python weekly_report_send_teams.py
       - name: Commit updated snapshot
         run: |

@@ -4,6 +4,7 @@ import requests
 from openpyxl import load_workbook
 from collections import defaultdict
 import os
+import tempfile
 import time
 import json
 from datetime import datetime, timedelta
@@ -17,11 +18,13 @@ AZURE_CLIENT_ID = os.environ.get("AZURE_CLIENT_ID")
 AZURE_TENANT_ID = os.environ.get("AZURE_TENANT_ID")
 AZURE_CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET")
 
-# Teams Webhook URL
-WEBHOOK_URL = "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7a93c82bdb7b4095894f25309cbe4673/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NymSHVyWZFGo_y0NQLWsEeapIiWl7f0L44B8z0zYAW4"
+# Teams Webhook URL — override via TEAMS_WEBHOOK_URL env var (e.g. GitHub Actions secret);
+# falls back to the hardcoded default so local runs work without extra setup.
+WEBHOOK_URL = os.environ.get("TEAMS_WEBHOOK_URL") or "https://defaultabe0ba584a8e4ee9985a85449c16df.58.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7a93c82bdb7b4095894f25309cbe4673/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NymSHVyWZFGo_y0NQLWsEeapIiWl7f0L44B8z0zYAW4"
 
-# File paths
-TEMP_FILE = r"D:\sharepoint\temp_source.xlsx"
+# File paths — uses the OS temp directory so it works on both Windows (local) and
+# Linux (GitHub Actions runner).
+TEMP_FILE = os.path.join(tempfile.gettempdir(), "temp_source.xlsx")
 
 # SharePoint API details
 SHAREPOINT_DRIVE_ID = "b!_Oj5AOOCqUa-6fnpgxmwM4Tmz3IIfOZIhM-bF3vfV8Q7o8oZ3WyrQ4ILTnuUDgHw"
