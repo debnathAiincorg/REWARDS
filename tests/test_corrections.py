@@ -554,6 +554,94 @@ def test_weekly_missing_week_key_in_old_snapshot_does_not_crash(tmp_path):
         assert not module.has_weekly_data_changed("2026-06-22", {"2026-06-22": {"Alice": 1}})
 
 
+# ── get_weekly_totals / has_weekly_totals_changed ──────────────────────────────
+
+def test_get_weekly_totals_extracts_points_and_amount():
+    employees = [
+        {"name": "Alice", "points": 5, "amount": 50, "prev_day_points": 2, "prev_day_amount": 20},
+        {"name": "Bob", "points": 3, "amount": 30, "prev_day_points": 1, "prev_day_amount": 10},
+    ]
+    assert module.get_weekly_totals(employees) == {
+        "Alice": {"points": 5, "amount": 50},
+        "Bob": {"points": 3, "amount": 30},
+    }
+
+
+def test_no_weekly_totals_change_when_identical(tmp_path):
+    totals = {"Alice": {"points": 5, "amount": 50}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": {}, "totals": totals}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_totals_changed("2026-06-22", totals)
+
+
+def test_weekly_totals_change_detected_when_amount_differs(tmp_path):
+    stored_totals = {"Alice": {"points": 5, "amount": 50}}
+    fresh_totals = {"Alice": {"points": 6, "amount": 60}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": {}, "totals": stored_totals}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert module.has_weekly_totals_changed("2026-06-22", fresh_totals)
+
+
+def test_weekly_totals_no_change_on_missing_totals_key_old_snapshot(tmp_path):
+    """Old-format snapshot with a "week" key but no "totals" sub-key must not crash
+    and must not be treated as a correction (no baseline to compare against yet)."""
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": {}}}, f)  # no "totals"
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_totals_changed("2026-06-22", {"Alice": {"points": 1, "amount": 10}})
+
+
+def test_weekly_totals_no_change_on_new_week(tmp_path):
+    stored_totals = {"Alice": {"points": 9, "amount": 90}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-19", "employees": {},
+                   "week": {"week_start": "2026-06-15", "days": {}, "totals": stored_totals}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_totals_changed("2026-06-22", {"Alice": {"points": 1, "amount": 10}})
+
+
+def test_weekly_totals_catches_whole_day_removed_when_per_day_check_misses_it(tmp_path):
+    """Regression test for the gap in has_weekly_data_changed(): if an entire
+    day's rows disappear from the source file, the per-day check never visits
+    that day (its loop only iterates fresh_days) and misses the resulting drop
+    in the weekly total. has_weekly_totals_changed(), comparing the actual
+    aggregated total, must catch it."""
+    stored_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+    fresh_days = {"2026-06-23": {"Alice": 3}}  # 2026-06-22 entirely gone
+    stored_totals = {"Alice": {"points": 5, "amount": 50}}  # 2+3
+    fresh_totals = {"Alice": {"points": 3, "amount": 30}}   # only 3 remains
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": stored_days, "totals": stored_totals}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        # The per-day proxy misses it entirely:
+        assert not module.has_weekly_data_changed("2026-06-22", fresh_days)
+        # The authoritative totals check catches it:
+        assert module.has_weekly_totals_changed("2026-06-22", fresh_totals)
+
+
+def test_save_and_load_weekly_totals_roundtrip(tmp_path):
+    employees = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+                           "Innovation": 0, "Extraordinary Performance": 0}}
+    week_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+    week_totals = {"Alice": {"points": 5, "amount": 50}}
+    snap_file = str(tmp_path / "snap.json")
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        module.save_snapshot("2026-06-24", employees, "2026-06-22", week_days, week_totals)
+        result = module.load_snapshot()
+    assert result["week"] == {"week_start": "2026-06-22", "days": week_days, "totals": week_totals}
+
+
 def test_format_prev_day_card_includes_extra_category():
     prev_day_breakdown = {
         "date_label": "Jun 26",

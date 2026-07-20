@@ -544,17 +544,22 @@ def load_snapshot():
         return None
 
 
-def save_snapshot(date_str, employees_dict, week_start_str=None, week_days_dict=None):
+def save_snapshot(date_str, employees_dict, week_start_str=None, week_days_dict=None, week_totals_dict=None):
     """Persist yesterday's per-employee category data as the new baseline.
 
     week_start_str/week_days_dict are optional so existing day-only callers
     (and tests) keep working unchanged; when provided, the current week's
     per-day breakdown is stored alongside under the "week" key.
+    week_totals_dict is optional the same way; when provided, it stores the
+    aggregated weekly Points/Amount per employee (see get_weekly_totals())
+    under "week"."totals" for the authoritative Weekly Report total check.
     """
     try:
         payload = {"date": date_str, "employees": employees_dict}
         if week_start_str is not None:
             payload["week"] = {"week_start": week_start_str, "days": week_days_dict or {}}
+            if week_totals_dict is not None:
+                payload["week"]["totals"] = week_totals_dict
         with open(SNAPSHOT_FILE, "w") as f:
             json.dump(payload, f, indent=2)
         print(f"[OK] Snapshot saved for {date_str}")
@@ -579,6 +584,12 @@ def has_weekly_data_changed(week_start_str, fresh_days):
     different week_start (a new week has started) all return False — those
     are not corrections. A day present only in fresh_days (the week grew by
     one day since the last run) is expected growth and is ignored here too.
+
+    NOTE: this is a proxy for "did the Weekly Report's totals change", not an
+    exact match — it only visits days present in both stored and fresh data,
+    so it cannot see an entire day's rows disappearing from the source file.
+    has_weekly_totals_changed() below is the authoritative check for that;
+    this function is kept as an additional (more granular, day-level) signal.
     """
     snapshot = load_snapshot()
     week_snapshot = snapshot.get("week") if snapshot else None
@@ -589,6 +600,37 @@ def has_weekly_data_changed(week_start_str, fresh_days):
         if day in stored_days and stored_days[day] != employees:
             return True
     return False
+
+
+def get_weekly_totals(employees):
+    """Extract {name: {"points":, "amount":}} from get_cumulative_data()'s
+    employees list — the exact Weekly Total Point/Amount values shown on the
+    Weekly Performance Report card, per employee."""
+    return {emp["name"]: {"points": emp["points"], "amount": emp["amount"]} for emp in employees}
+
+
+def has_weekly_totals_changed(week_start_str, fresh_totals):
+    """Return True only when a stored weekly-totals snapshot exists for the
+    same week_start and differs from fresh_totals.
+
+    This is the authoritative Weekly Report check: it compares the actual
+    aggregated weekly Points/Amount per employee (as shown on the card), so
+    unlike has_weekly_data_changed() it also catches a whole day's rows
+    disappearing from the source file, or any other change that shifts the
+    total without necessarily changing an individual day's record.
+
+    A missing snapshot, missing "week"/"totals" key (old-format snapshot), or
+    a different week_start (a new week has started) all return False — those
+    are not corrections.
+    """
+    snapshot = load_snapshot()
+    week_snapshot = snapshot.get("week") if snapshot else None
+    if not week_snapshot or week_snapshot.get("week_start") != week_start_str:
+        return False
+    stored_totals = week_snapshot.get("totals")
+    if stored_totals is None:
+        return False
+    return stored_totals != fresh_totals
 
 
 # MAIN EXECUTION
@@ -608,35 +650,6 @@ if __name__ == "__main__":
     week_start_str = week_start.isoformat()
     fresh_week_days = get_weekly_daily_breakdown()
 
-    snapshot = load_snapshot()
-
-    if snapshot is None:
-        date_changed = True
-        daily_correction = False
-    elif snapshot["date"] != yesterday_str:
-        date_changed = True
-        daily_correction = False
-    elif snapshot["employees"] != fresh_yesterday_data:
-        date_changed = False
-        daily_correction = True
-    else:
-        date_changed = False
-        daily_correction = False
-
-    weekly_correction = has_weekly_data_changed(week_start_str, fresh_week_days)
-
-    changed = date_changed or daily_correction or weekly_correction
-    is_correction = daily_correction or weekly_correction
-
-    if not changed:
-        save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days)
-        print("[INFO] No change detected since last check. Exiting silently.")
-        print("[INFO] Baseline snapshot updated (no send needed)")
-        cleanup_temp_file()
-        exit(0)
-
-    title_prefix = "🔧 Corrected Report - " if is_correction else ""
-
     print("Determining date range and reading Excel data...")
     week_label, employee_data, prev_day_breakdown = get_cumulative_data()
 
@@ -644,6 +657,61 @@ if __name__ == "__main__":
         print("[ERROR] No data to send.")
         cleanup_temp_file()
         exit(1)
+
+    fresh_weekly_totals = get_weekly_totals(employee_data)
+
+    snapshot = load_snapshot()
+
+    # Condition 1: date check — does yesterday's date match the snapshot's stored date.
+    if snapshot is None:
+        date_changed = True
+        daily_correction = False
+    elif snapshot["date"] != yesterday_str:
+        date_changed = True
+        daily_correction = False
+    # Condition 2: Previous Day Performance Breakdown check — per-employee,
+    # per-category data for yesterday vs. what's stored in the snapshot.
+    elif snapshot["employees"] != fresh_yesterday_data:
+        date_changed = False
+        daily_correction = True
+    else:
+        date_changed = False
+        daily_correction = False
+
+    # Condition 3: Weekly Performance Report check — aggregated weekly
+    # Points/Amount per employee (as shown on the card), vs. what's stored.
+    # weekly_totals_correction is the authoritative check; weekly_day_correction
+    # is kept as an additional day-level signal (see has_weekly_data_changed()).
+    weekly_day_correction = has_weekly_data_changed(week_start_str, fresh_week_days)
+    weekly_totals_correction = has_weekly_totals_changed(week_start_str, fresh_weekly_totals)
+    weekly_correction = weekly_day_correction or weekly_totals_correction
+
+    changed = date_changed or daily_correction or weekly_correction
+    is_correction = daily_correction or weekly_correction
+
+    print("\nChange detection:")
+    print(f"  [1] Date changed (yesterday vs. snapshot date): {date_changed}")
+    print(f"  [2] Previous Day Performance Breakdown changed (per-category, yesterday): {daily_correction}")
+    print(f"  [3] Weekly Performance Report total changed (per-employee weekly points/amount): {weekly_totals_correction}"
+          f"{' [also flagged by raw per-day breakdown]' if weekly_day_correction and not weekly_totals_correction else ''}")
+
+    if not changed:
+        save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days, fresh_weekly_totals)
+        print("[INFO] No change detected since last check (date, Previous Day Breakdown, and Weekly Report totals all match). Exiting silently.")
+        print("[INFO] Baseline snapshot updated (no send needed)")
+        cleanup_temp_file()
+        exit(0)
+
+    reasons = []
+    if date_changed:
+        reasons.append("date changed")
+    if daily_correction:
+        reasons.append("Previous Day Performance Breakdown data changed")
+    if weekly_correction:
+        reasons.append("Weekly Performance Report total changed")
+    print(f"[INFO] Sending — triggered by: {', '.join(reasons)}")
+
+    title_prefix = "🔧 Corrected Report - " if is_correction else ""
 
     print(f"[OK] Report: {week_label}")
     print(f"[OK] Employees: {len(employee_data)}")
@@ -687,7 +755,7 @@ if __name__ == "__main__":
         cleanup_temp_file()
         exit(1)
 
-    save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days)
+    save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days, fresh_weekly_totals)
     print(f"\n[OK] Total cards sent: {cards_sent}")
     cleanup_temp_file()
     print("=" * 60)

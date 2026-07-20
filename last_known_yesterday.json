@@ -79,6 +79,52 @@
         "Shresthita Mukherjee": 2,
         "Debrup Mondal": 0
       }
+    },
+    "totals": {
+      "Debnath Paul": {
+        "points": 8,
+        "amount": 80
+      },
+      "Madhuparna Naskar": {
+        "points": 10,
+        "amount": 100
+      },
+      "Pradip Ray": {
+        "points": 12,
+        "amount": 120
+      },
+      "Rahul Paul": {
+        "points": 12,
+        "amount": 120
+      },
+      "Shresthita Mukherjee": {
+        "points": 6,
+        "amount": 60
+      },
+      "Srijan Banerjee": {
+        "points": 7,
+        "amount": 70
+      },
+      "Anurima Nath": {
+        "points": 11,
+        "amount": 110
+      },
+      "Monirul Molla": {
+        "points": 8,
+        "amount": 80
+      },
+      "Atreyee Majumder": {
+        "points": 10,
+        "amount": 100
+      },
+      "Debrup Mondal": {
+        "points": 0,
+        "amount": 0
+      },
+      "Pratim Rath": {
+        "points": 5,
+        "amount": 50
+      }
     }
   }
 }
