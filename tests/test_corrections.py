@@ -183,6 +183,33 @@ def test_no_change_when_no_snapshot(tmp_path):
         assert not module.has_yesterday_data_changed("2026-06-24", {"Alice": {}})
 
 
+def test_baseline_established_without_send_enables_future_correction_detection(tmp_path):
+    """Regression test: save_snapshot() must persist a baseline even on a run
+    where nothing changed (so no Teams send happened), otherwise a "week" key
+    never gets written and weekly corrections can never be detected on any
+    later run. Simulates two runs: the first establishes the baseline (as the
+    fixed __main__ now does on its changed=False, save-anyway path), the
+    second shows a later edit to that same baseline data is now caught."""
+    snap_file = str(tmp_path / "snap.json")
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert module.load_snapshot() is None  # no prior snapshot at all
+
+        yesterday_employees = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+                                          "Innovation": 0, "Extraordinary Performance": 0}}
+        week_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+        module.save_snapshot("2026-06-24", yesterday_employees, "2026-06-22", week_days)
+
+        snapshot = module.load_snapshot()
+        assert snapshot["week"] == {"week_start": "2026-06-22", "days": week_days}
+
+        # Next run: yesterday itself is unchanged, but Monday's already-recorded
+        # data was corrected in the source file — must now be detectable because
+        # a baseline exists.
+        corrected_week_days = {"2026-06-22": {"Alice": 5}, "2026-06-23": {"Alice": 3}}
+        assert not module.has_yesterday_data_changed("2026-06-24", yesterday_employees)
+        assert module.has_weekly_data_changed("2026-06-22", corrected_week_days)
+
+
 # ── Dynamic column detection ──────────────────────────────────────────────────
 
 CATEGORIES_PLUS = CATEGORIES + ["Teamwork"]
