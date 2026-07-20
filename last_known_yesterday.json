@@ -1,4 +1,84 @@
 {
   "date": "2026-07-19",
-  "employees": {}
+  "employees": {},
+  "week": {
+    "week_start": "2026-07-13",
+    "days": {
+      "2026-07-13": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 2,
+        "Rahul Paul": 2,
+        "Monirul Molla": 0,
+        "Debnath Paul": 0,
+        "Debrup Mondal": 0
+      },
+      "2026-07-14": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 0,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 2,
+        "Rahul Paul": 2,
+        "Monirul Molla": 0,
+        "Debnath Paul": 0,
+        "Debrup Mondal": 0
+      },
+      "2026-07-15": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 2,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 0,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 1,
+        "Rahul Paul": 2,
+        "Monirul Molla": 1,
+        "Debnath Paul": 2,
+        "Debrup Mondal": 0
+      },
+      "2026-07-16": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 0,
+        "Rahul Paul": 2,
+        "Monirul Molla": 3,
+        "Debnath Paul": 2,
+        "Shresthita Mukherjee": 2,
+        "Debrup Mondal": 0
+      },
+      "2026-07-17": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 0,
+        "Rahul Paul": 2,
+        "Monirul Molla": 3,
+        "Debnath Paul": 2,
+        "Shresthita Mukherjee": 2,
+        "Debrup Mondal": 0
+      },
+      "2026-07-18": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 2,
+        "Anurima Nath": 1,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 0,
+        "Pratim Rath": 0,
+        "Rahul Paul": 2,
+        "Monirul Molla": 1,
+        "Debnath Paul": 2,
+        "Shresthita Mukherjee": 2,
+        "Debrup Mondal": 0
+      }
+    }
+  }
 }
