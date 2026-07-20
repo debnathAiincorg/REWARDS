@@ -397,7 +397,7 @@ def get_weekly_daily_breakdown():
     return result
 
 
-def format_prev_day_card(prev_day_breakdown, title_prefix=""):
+def format_prev_day_card(prev_day_breakdown):
     """Build standalone Adaptive Card for previous day performance breakdown."""
     if not prev_day_breakdown or not prev_day_breakdown["employees"]:
         return None
@@ -418,7 +418,7 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
         )
 
     body = [
-        {"type": "TextBlock", "text": f"{title_prefix}Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": "Previous Day Performance Breakdown", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": f"Date: {prev_day_breakdown['date_label']}", "weight": "Normal", "size": "Medium", "spacing": "None", "wrap": True},
         {"type": "ColumnSet", "separator": True, "columns": header_columns}
     ]
@@ -444,9 +444,9 @@ def format_prev_day_card(prev_day_breakdown, title_prefix=""):
     }
 
 
-def format_teams_message(week_label, employees, title_prefix=""):
+def format_teams_message(week_label, employees):
     body = [
-        {"type": "TextBlock", "text": f"{title_prefix}Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
+        {"type": "TextBlock", "text": "Weekly Performance Report", "weight": "Bolder", "size": "Large", "color": "Accent", "wrap": True},
         {"type": "TextBlock", "text": week_label, "weight": "Bolder", "size": "Medium", "spacing": "None", "wrap": True},
         {
             "type": "ColumnSet",
@@ -714,8 +714,6 @@ if __name__ == "__main__":
         reasons.append("Weekly Performance Report total changed")
     print(f"[INFO] Sending — triggered by: {', '.join(reasons)}")
 
-    title_prefix = "🔧 Corrected Report - " if is_correction else ""
-
     print(f"[OK] Report: {week_label}")
     print(f"[OK] Employees: {len(employee_data)}")
     if prev_day_breakdown and prev_day_breakdown["employees"]:
@@ -737,18 +735,24 @@ if __name__ == "__main__":
     cards_sent = 0
 
     if prev_day_breakdown and prev_day_breakdown["employees"]:
-        prev_day_card = format_prev_day_card(prev_day_breakdown, title_prefix=title_prefix)
+        prev_day_card = format_prev_day_card(prev_day_breakdown)
         if prev_day_card:
             print("Sending Previous Day Performance Breakdown card to Teams...")
             if send_teams_webhook_message(WEBHOOK_URL, prev_day_card):
                 print("[OK] Previous Day card sent successfully!")
                 cards_sent += 1
+                # The webhook (Power Automate) returns as soon as it accepts the
+                # request, then posts to Teams asynchronously on its own — so this
+                # HTTP call completing does not mean the card has actually landed
+                # in Teams yet. A short pause reduces the chance the second card's
+                # flow run finishes posting before this one does.
+                time.sleep(2)
             else:
                 print("[ERROR] Failed to send Previous Day card to Teams")
                 cleanup_temp_file()
                 exit(1)
 
-    weekly_card = format_teams_message(week_label, employee_data, title_prefix=title_prefix)
+    weekly_card = format_teams_message(week_label, employee_data)
     print("Sending Weekly Performance Report card to Teams...")
     if send_teams_webhook_message(WEBHOOK_URL, weekly_card):
         print("[OK] Weekly Report card sent successfully!")
