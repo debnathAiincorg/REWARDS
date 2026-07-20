@@ -56,7 +56,9 @@ def download_from_sharepoint_api(token):
         file_url = f"https://graph.microsoft.com/v1.0/drives/{SHAREPOINT_DRIVE_ID}/items/{SHAREPOINT_ITEM_ID}/content"
         response = requests.get(file_url, headers=headers, timeout=30)
         if response.status_code == 200:
-            os.makedirs(os.path.dirname(TEMP_FILE), exist_ok=True)
+            temp_dir = os.path.dirname(TEMP_FILE)
+            if temp_dir:
+                os.makedirs(temp_dir, exist_ok=True)
             with open(TEMP_FILE, 'wb') as f:
                 f.write(response.content)
             print("[OK] Source file downloaded successfully")
@@ -83,7 +85,9 @@ def download_source_file():
         if response.headers.get('content-type', '').startswith('text/html') or b'<!DOCTYPE' in response.content[:100]:
             print("Note: Public link requires authentication. Using environment variable credentials...")
         else:
-            os.makedirs(os.path.dirname(TEMP_FILE), exist_ok=True)
+            temp_dir = os.path.dirname(TEMP_FILE)
+            if temp_dir:
+                os.makedirs(temp_dir, exist_ok=True)
             with open(TEMP_FILE, 'wb') as f:
                 f.write(response.content)
             print("[OK] Source file downloaded successfully")
