@@ -191,16 +191,32 @@ def get_real_yesterday_data():
     return result
 
 
+def _get_week_range():
+    """Return (start, end) for the current week's report range: Monday through
+    yesterday, with the Monday special-case (show the previous complete week).
+
+    Shared by get_cumulative_data() (Weekly Performance Report) and
+    get_weekly_daily_breakdown() (weekly change-detection snapshot) so the
+    date-range calculation lives in one place.
+    """
+    today = datetime.now().date()
+    weekday = today.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
+    if weekday == 0:  # Monday → show previous complete week
+        start = today - timedelta(days=7)   # previous Monday
+    else:
+        start = today - timedelta(days=weekday)  # this Monday
+    end = today - timedelta(days=1)
+    return start, end
+
+
 def get_cumulative_data():
     """Determine date range and read cumulative data from Excel."""
     today = datetime.now().date()
     weekday = today.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3, Fri=4, Sat=5, Sun=6
 
-    this_monday = today - timedelta(days=weekday)
+    start, end = _get_week_range()
 
     if weekday == 0:  # Monday → show previous complete week same as Sunday
-        start = today - timedelta(days=7)   # previous Monday
-        end = today - timedelta(days=1)     # previous Sunday
         week_number = start.isocalendar()[1]
         week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')} (Complete Week)"
         prev_day_start = today - timedelta(days=2)  # previous Saturday (for Weekly Report card only)
@@ -208,8 +224,6 @@ def get_cumulative_data():
         breakdown_prev_day_start = today - timedelta(days=1)  # previous Sunday (for breakdown card — no data, will show 0s)
         breakdown_prev_day_end = today - timedelta(days=1)    # previous Sunday (for breakdown card — no data, will show 0s)
     elif weekday == 6:  # Sunday → this week Mon to yesterday (Saturday = complete week)
-        start = this_monday
-        end = today - timedelta(days=1)  # yesterday = Saturday
         week_number = start.isocalendar()[1]
         week_label = f"Week #{week_number} - {start.strftime('%b %d')} to {end.strftime('%b %d')} (Complete Week)"
         prev_day_start = end
@@ -217,8 +231,6 @@ def get_cumulative_data():
         breakdown_prev_day_start = prev_day_start
         breakdown_prev_day_end = prev_day_end
     else:  # Tue to Sat → this Monday to yesterday
-        start = this_monday
-        end = today - timedelta(days=1)
         week_number = start.isocalendar()[1]
         if start == end:
             week_label = f"Week #{week_number} - {start.strftime('%b %d')}"
@@ -330,6 +342,50 @@ def get_cumulative_data():
     }
 
     return week_label, employees, prev_day_breakdown_data
+
+
+def get_weekly_daily_breakdown():
+    """Read per-employee, per-day points for the current week's report range.
+
+    Uses the same range as get_cumulative_data() (via _get_week_range()) and the
+    same row-dedup-by-(name,date) and _safe_int() handling. Returns
+    {date_iso: {employee_name: points}} — one entry per calendar day with data,
+    used to detect day-level corrections within the current week's snapshot.
+    """
+    start, end = _get_week_range()
+
+    wb = load_workbook(TEMP_FILE)
+    if "Daily Performance Bonus" in wb.sheetnames:
+        ws = wb["Daily Performance Bonus"]
+    else:
+        ws = max(wb.worksheets, key=lambda s: s.max_row or 0)
+
+    date_col, name_col, _, point_cols, _ = _detect_columns(ws)
+    if not name_col or not date_col:
+        return {}
+
+    row_data = {}  # key: (name, date), value: points
+    for row in range(2, ws.max_row + 1):
+        name_val = ws.cell(row=row, column=name_col).value
+        date_val = ws.cell(row=row, column=date_col).value
+        if not name_val or not date_val:
+            continue
+        row_date = date_val.date() if hasattr(date_val, "date") else None
+        if not row_date:
+            continue
+        name = str(name_val).strip()
+        pts = sum(
+            _safe_int(ws.cell(row=row, column=c).value, context=f"row {row}, {name}")
+            for c in point_cols
+        )
+        row_data[(name, row_date)] = pts
+
+    result = {}
+    for (name, row_date), pts in row_data.items():
+        if start <= row_date <= end:
+            result.setdefault(row_date.isoformat(), {})[name] = pts
+
+    return result
 
 
 def format_prev_day_card(prev_day_breakdown, title_prefix=""):
@@ -482,11 +538,19 @@ def load_snapshot():
         return None
 
 
-def save_snapshot(date_str, employees_dict):
-    """Persist yesterday's per-employee category data as the new baseline."""
+def save_snapshot(date_str, employees_dict, week_start_str=None, week_days_dict=None):
+    """Persist yesterday's per-employee category data as the new baseline.
+
+    week_start_str/week_days_dict are optional so existing day-only callers
+    (and tests) keep working unchanged; when provided, the current week's
+    per-day breakdown is stored alongside under the "week" key.
+    """
     try:
+        payload = {"date": date_str, "employees": employees_dict}
+        if week_start_str is not None:
+            payload["week"] = {"week_start": week_start_str, "days": week_days_dict or {}}
         with open(SNAPSHOT_FILE, "w") as f:
-            json.dump({"date": date_str, "employees": employees_dict}, f, indent=2)
+            json.dump(payload, f, indent=2)
         print(f"[OK] Snapshot saved for {date_str}")
     except Exception as e:
         print(f"[WARNING] Could not save snapshot: {e}")
@@ -498,6 +562,27 @@ def has_yesterday_data_changed(yesterday_date_str, fresh_data):
     if snapshot is None or snapshot.get("date") != yesterday_date_str:
         return False
     return snapshot["employees"] != fresh_data
+
+
+def has_weekly_data_changed(week_start_str, fresh_days):
+    """Return True only when a stored weekly snapshot exists for the same
+    week_start and at least one day present in BOTH the stored and fresh data
+    has different employee points (an actual correction).
+
+    A missing snapshot, a missing "week" key (old-format snapshot file), or a
+    different week_start (a new week has started) all return False — those
+    are not corrections. A day present only in fresh_days (the week grew by
+    one day since the last run) is expected growth and is ignored here too.
+    """
+    snapshot = load_snapshot()
+    week_snapshot = snapshot.get("week") if snapshot else None
+    if not week_snapshot or week_snapshot.get("week_start") != week_start_str:
+        return False
+    stored_days = week_snapshot.get("days", {})
+    for day, employees in fresh_days.items():
+        if day in stored_days and stored_days[day] != employees:
+            return True
+    return False
 
 
 # MAIN EXECUTION
@@ -513,20 +598,29 @@ if __name__ == "__main__":
     yesterday_str = yesterday_date.isoformat()
     fresh_yesterday_data = get_real_yesterday_data()
 
+    week_start, _ = _get_week_range()
+    week_start_str = week_start.isoformat()
+    fresh_week_days = get_weekly_daily_breakdown()
+
     snapshot = load_snapshot()
 
     if snapshot is None:
-        changed = True
-        is_correction = False
+        date_changed = True
+        daily_correction = False
     elif snapshot["date"] != yesterday_str:
-        changed = True
-        is_correction = False
+        date_changed = True
+        daily_correction = False
     elif snapshot["employees"] != fresh_yesterday_data:
-        changed = True
-        is_correction = True
+        date_changed = False
+        daily_correction = True
     else:
-        changed = False
-        is_correction = False
+        date_changed = False
+        daily_correction = False
+
+    weekly_correction = has_weekly_data_changed(week_start_str, fresh_week_days)
+
+    changed = date_changed or daily_correction or weekly_correction
+    is_correction = daily_correction or weekly_correction
 
     if not changed:
         print("[INFO] No change detected since last check. Exiting silently.")
@@ -585,7 +679,7 @@ if __name__ == "__main__":
         cleanup_temp_file()
         exit(1)
 
-    save_snapshot(yesterday_str, fresh_yesterday_data)
+    save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days)
     print(f"\n[OK] Total cards sent: {cards_sent}")
     cleanup_temp_file()
     print("=" * 60)

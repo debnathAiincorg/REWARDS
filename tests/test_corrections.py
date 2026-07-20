@@ -402,6 +402,131 @@ def test_get_real_yesterday_data_stray_text_treated_as_zero(capsys, tmp_path):
     assert "stray text" in captured.out
 
 
+# ── _get_week_range / get_weekly_daily_breakdown ──────────────────────────────
+
+def test_get_week_range_ends_yesterday():
+    start, end = module._get_week_range()
+    assert end == date.today() - timedelta(days=1)
+    assert start <= end
+
+
+def test_get_weekly_daily_breakdown_returns_per_day_points(tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook([
+        {"date": yesterday, "name": "Alice", "Punctuality": 1, "L&D": 1,
+         "Fluency Compliance": 0, "Innovation": 0, "Extraordinary Performance": 0},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_weekly_daily_breakdown()
+
+    yesterday_iso = (date.today() - timedelta(days=1)).isoformat()
+    assert result[yesterday_iso] == {"Alice": 2}
+
+
+def test_get_weekly_daily_breakdown_dedupes_by_name_and_date(tmp_path):
+    yesterday = datetime.combine(date.today() - timedelta(days=1), datetime.min.time())
+    wb = make_test_workbook([
+        {"date": yesterday, "name": "Bob", "Punctuality": 0, "L&D": 0,
+         "Fluency Compliance": 0, "Innovation": 0, "Extraordinary Performance": 0},
+        {"date": yesterday, "name": "Bob", "Punctuality": 1, "L&D": 1,
+         "Fluency Compliance": 1, "Innovation": 1, "Extraordinary Performance": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_weekly_daily_breakdown()
+
+    yesterday_iso = (date.today() - timedelta(days=1)).isoformat()
+    assert result[yesterday_iso]["Bob"] == 5  # last occurrence wins
+
+
+def test_get_weekly_daily_breakdown_excludes_days_outside_range(tmp_path):
+    far_past = datetime.combine(date.today() - timedelta(days=30), datetime.min.time())
+    wb = make_test_workbook([
+        {"date": far_past, "name": "Carol", "Punctuality": 1, "L&D": 0,
+         "Fluency Compliance": 0, "Innovation": 0, "Extraordinary Performance": 0},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        result = module.get_weekly_daily_breakdown()
+
+    assert result == {}
+
+
+# ── save_snapshot / load_snapshot weekly round-trip ────────────────────────────
+
+def test_save_and_load_weekly_roundtrip(tmp_path):
+    employees = {"Alice": {"Punctuality": 1, "L&D": 0, "Fluency Compliance": 0,
+                           "Innovation": 0, "Extraordinary Performance": 0}}
+    week_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+    snap_file = str(tmp_path / "snap.json")
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        module.save_snapshot("2026-06-24", employees, "2026-06-22", week_days)
+        result = module.load_snapshot()
+    assert result["week"] == {"week_start": "2026-06-22", "days": week_days}
+
+
+# ── has_weekly_data_changed ─────────────────────────────────────────────────────
+
+def test_no_weekly_change_when_days_identical(tmp_path):
+    week_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": week_days}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_data_changed("2026-06-22", week_days)
+
+
+def test_weekly_correction_detected_when_past_day_changes(tmp_path):
+    stored_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}
+    fresh_days = {"2026-06-22": {"Alice": 5}, "2026-06-23": {"Alice": 3}}  # Monday corrected
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-23", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": stored_days}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert module.has_weekly_data_changed("2026-06-22", fresh_days)
+
+
+def test_weekly_no_false_positive_when_new_day_added(tmp_path):
+    stored_days = {"2026-06-22": {"Alice": 2}}
+    fresh_days = {"2026-06-22": {"Alice": 2}, "2026-06-23": {"Alice": 3}}  # grew by one day
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-22", "employees": {},
+                   "week": {"week_start": "2026-06-22", "days": stored_days}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_data_changed("2026-06-22", fresh_days)
+
+
+def test_weekly_new_week_resets_without_flagging_correction(tmp_path):
+    stored_days = {"2026-06-15": {"Alice": 9}}
+    fresh_days = {"2026-06-22": {"Alice": 1}}
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-19", "employees": {},
+                   "week": {"week_start": "2026-06-15", "days": stored_days}}, f)
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        assert not module.has_weekly_data_changed("2026-06-22", fresh_days)
+
+
+def test_weekly_missing_week_key_in_old_snapshot_does_not_crash(tmp_path):
+    snap_file = str(tmp_path / "snap.json")
+    with open(snap_file, "w") as f:
+        json.dump({"date": "2026-06-24", "employees": {}}, f)  # old-format, no "week" key
+    with patch.object(module, "SNAPSHOT_FILE", snap_file):
+        result = module.load_snapshot()
+        assert "week" not in result
+        assert not module.has_weekly_data_changed("2026-06-22", {"2026-06-22": {"Alice": 1}})
+
+
 def test_format_prev_day_card_includes_extra_category():
     prev_day_breakdown = {
         "date_label": "Jun 26",
