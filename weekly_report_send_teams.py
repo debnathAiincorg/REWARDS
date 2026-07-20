@@ -746,7 +746,7 @@ if __name__ == "__main__":
                 # HTTP call completing does not mean the card has actually landed
                 # in Teams yet. A short pause reduces the chance the second card's
                 # flow run finishes posting before this one does.
-                time.sleep(2)
+                time.sleep(5)
             else:
                 print("[ERROR] Failed to send Previous Day card to Teams")
                 cleanup_temp_file()
