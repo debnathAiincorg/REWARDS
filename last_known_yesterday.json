@@ -1,8 +1,8 @@
 {
-  "date": "2026-07-22",
+  "date": "2026-07-23",
   "employees": {
     "Pradip Ray": {
-      "Punctuality": 0,
+      "Punctuality": 1,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -10,7 +10,7 @@
       "Extraordinary Performance": 0
     },
     "Srijan Banerjee": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -34,7 +34,7 @@
       "Extraordinary Performance": 0
     },
     "Atreyee Majumder": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -63,7 +63,7 @@
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
-      "Extraordinary Performance": 0
+      "Extraordinary Performance": 4
     },
     "Debnath Paul": {
       "Punctuality": 0,
@@ -74,7 +74,7 @@
       "Extraordinary Performance": 0
     },
     "Shresthita Mukherjee": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -131,42 +131,55 @@
         "Debnath Paul": 1,
         "Shresthita Mukherjee": 2,
         "Debrup Mondal": 0
+      },
+      "2026-07-23": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 1,
+        "Pratim Rath": 0,
+        "Rahul Paul": 2,
+        "Monirul Molla": 5,
+        "Debnath Paul": 1,
+        "Shresthita Mukherjee": 1,
+        "Debrup Mondal": 0
       }
     },
     "totals": {
-      "Anurima Nath": {
-        "points": 6,
-        "amount": 60
+      "Monirul Molla": {
+        "points": 8,
+        "amount": 80
       },
-      "Atreyee Majumder": {
-        "points": 6,
-        "amount": 60
+      "Anurima Nath": {
+        "points": 8,
+        "amount": 80
       },
       "Madhuparna Naskar": {
-        "points": 6,
-        "amount": 60
+        "points": 8,
+        "amount": 80
+      },
+      "Pradip Ray": {
+        "points": 7,
+        "amount": 70
       },
       "Rahul Paul": {
+        "points": 8,
+        "amount": 80
+      },
+      "Atreyee Majumder": {
+        "points": 7,
+        "amount": 70
+      },
+      "Debnath Paul": {
         "points": 6,
         "amount": 60
       },
       "Shresthita Mukherjee": {
-        "points": 6,
-        "amount": 60
+        "points": 7,
+        "amount": 70
       },
       "Srijan Banerjee": {
-        "points": 4,
-        "amount": 40
-      },
-      "Debnath Paul": {
-        "points": 5,
-        "amount": 50
-      },
-      "Monirul Molla": {
-        "points": 3,
-        "amount": 30
-      },
-      "Pradip Ray": {
         "points": 5,
         "amount": 50
       },
