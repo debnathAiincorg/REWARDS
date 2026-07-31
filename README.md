@@ -20,6 +20,7 @@ A Python script that reads employee performance data from a SharePoint Excel fil
 
 - Auto-detects the `Date`, `Name`, and category columns from row 1 — no column positions are hardcoded.
 - Identifies category columns: `Punctuality`, `L&D`, `Fluency Compliance`, `Innovation`, `Extraordinary Performance`
+- Also auto-detects an optional `Notes` column (case-insensitive header match) and keeps it separate from the numeric category columns — it's never summed into points and never picked up as a new category.
 - Collects all unique employee names from the sheet automatically.
 - New employees added to the Excel file appear in reports with no code changes.
 - Deduplicates rows by (name, date) to prevent double-counting.
@@ -49,7 +50,8 @@ A Python script that reads employee performance data from a SharePoint Excel fil
 - **Breakdown Card:**
   - Shows category-level scores from the "Daily Performance Bonus" sheet
   - One row per employee with actual values: Punctuality, L&D, Fluency Compliance, Innovation, Extraordinary Performance
-  - On Monday: All employees shown with 0s (since Sunday is non-working)
+  - Always includes a trailing **Notes** column (free text, not summed) — blank for a row if the source sheet has no `Notes` column, or the cell is empty for that employee/day
+  - On Monday: All employees shown with 0s (since Sunday is non-working), Notes blank
   - On other days: Only employees with data for that previous day are shown; if no data exists, breakdown card is skipped
 
 ### 5. Change detection — skip sending when nothing changed
@@ -80,8 +82,9 @@ Card titles are always plain — **"Previous Day Performance Breakdown"** and **
 Title: "Previous Day Performance Breakdown"
 Date Label: (e.g., "Jun 21" for Monday's Sunday, or "Jun 22" for other days)
 
-Columns: Name | Punctuality | L&D | Fluency Compliance | Innovation | Extraordinary Performance
+Columns: Name | Punctuality | L&D | Fluency Compliance | Innovation | Extraordinary Performance | Notes
 ```
+`Notes` is free text and always shown as a trailing column, blank when the source sheet has no value for that row.
 
 **Card 2: Weekly Performance Report** (always sent)
 ```
@@ -130,12 +133,14 @@ This file is the baseline the change-detection system (step 5 above) compares ag
 | Key | Set by | Backs condition |
 |---|---|---|
 | `date` | Calendar date of "yesterday" at the time of the last run | #1 Date changed |
-| `employees` | Per-employee, per-category breakdown for yesterday (`get_real_yesterday_data()`) | #2 Previous Day Breakdown changed |
+| `employees` | Per-employee, per-category breakdown for yesterday (`get_real_yesterday_data()`) — numeric categories only | #2 Previous Day Breakdown changed |
 | `week.week_start` | Monday of the current report week | #3 (used to detect week rollover) |
 | `week.days` | Per-day, per-employee raw points for the current week (`get_weekly_daily_breakdown()`) | #3, secondary per-day proxy |
 | `week.totals` | Per-employee aggregated weekly Points/Amount (`get_weekly_totals()`) — the numbers shown on the Weekly Report card | #3, authoritative check |
 
 `week.totals` is the newer of these keys, added alongside `week.days` (rather than replacing it) so both the day-level and totals-level checks can run — see step 5. An old snapshot file missing `week` or `week.totals` entirely is handled gracefully (treated as "no baseline yet" for that check, not a crash), so upgrading is automatic on the next run.
+
+> **`Notes` is intentionally excluded from `employees` here.** `get_real_yesterday_data()` (which builds this snapshot) only reads the numeric category columns detected by `_detect_columns()`, not `Notes`. The Previous Day Teams card gets its Notes values from a separate read of the sheet inside `get_cumulative_data()`. So a `Notes` value reaches the Teams card but is **not** persisted into `last_known_yesterday.json` — anything else that reads this file (e.g. a dashboard) won't see it.
 
 ---
 
@@ -280,23 +285,25 @@ Change detection:
 
 - **Sheet name:** `Daily Performance Bonus`
 - **Required columns:** `Date`, `Name`, `Punctuality`, `L&D`, `Fluency Compliance`, `Innovation`, `Extraordinary Performance`
+- **Optional column:** `Notes` (case-insensitive header match) — free text per employee/day. Detected automatically, excluded from category detection and point totals, and passed through as-is to the Previous Day Teams card. See the caveat in [Snapshot File](#snapshot-file-last_known_yesterdayjson) about where Notes does and doesn't propagate.
 - Additional columns (like `Index`) are recognized and skipped
 - Any unknown numeric column is treated as a point column (summed in weekly total)
 - New employees (rows) are picked up automatically on the next run
 
 ### Example Sheet Structure
 
-| Index | Date | Name | Punctuality | L&D | Fluency Compliance | Innovation | Extraordinary Performance |
-|---|---|---|---|---|---|---|---|
-| 1 | 2026-06-22 | Employee1 | 1 | 1 | 0 | 0 | 0 |
-| 2 | 2026-06-22 | Employee2 | 1 | 1 | 0 | 0 | 0 |
-| 3 | 2026-06-22 | Employee3 | 0 | 0 | 0 | 0 | 0 |
+| Index | Date | Name | Punctuality | L&D | Fluency Compliance | Innovation | Extraordinary Performance | Notes |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 2026-06-22 | Employee1 | 1 | 1 | 0 | 0 | 0 | |
+| 2 | 2026-06-22 | Employee2 | 1 | 1 | 0 | 0 | 0 | Left early, approved |
+| 3 | 2026-06-22 | Employee3 | 0 | 0 | 0 | 0 | 0 | |
 
 ---
 
 ## Key Features
 
 ✓ **Automatic column detection** — No hardcoded column positions  
+✓ **Optional Notes column** — free-text per employee/day, auto-detected, excluded from category detection and point totals, shown on the Previous Day Teams card  
 ✓ **Automatic employee discovery** — New rows/names picked up dynamically  
 ✓ **Deduplication** — Prevents double-counting on duplicate (name, date) rows  
 ✓ **Two-card split** — Breakdown card sent independently from weekly summary  
@@ -317,4 +324,5 @@ Change detection:
 - **Sorting:** Employees ordered by previous-day amount (highest first), name (A–Z) as tiebreaker.
 - **Rows with no date or name columns are skipped** — handles sparse or malformed Excel data gracefully.
 - **Card send order** (Previous Day before Weekly Report) relies on a 5-second delay, not a hard guarantee — see step 6 in How It Works.
+- **`Notes` reaches Teams, not the snapshot:** the optional `Notes` free-text column is included on the Previous Day Teams card, but `last_known_yesterday.json`'s `employees` object currently excludes it (see [Snapshot File](#snapshot-file-last_known_yesterdayjson)) — anything else reading that file won't see Notes values.
 - **Secrets:** never commit real Azure or webhook credentials. `.env` is gitignored; `.env.example` holds placeholders only. In CI, the same values live in GitHub Actions Secrets (see GitHub Actions Workflow above).
