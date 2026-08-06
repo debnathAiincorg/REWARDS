@@ -58,7 +58,7 @@
       "Extraordinary Performance": 0
     },
     "Monirul Molla": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 0,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -127,7 +127,7 @@
         "Atreyee Majumder": 2,
         "Pratim Rath": 1,
         "Rahul Paul": 2,
-        "Monirul Molla": 1,
+        "Monirul Molla": 0,
         "Debnath Paul": 0,
         "Shresthita Mukherjee": 1,
         "Debrup Mondal": 0
@@ -154,10 +154,6 @@
         "points": 6,
         "amount": 60
       },
-      "Monirul Molla": {
-        "points": 5,
-        "amount": 50
-      },
       "Pratim Rath": {
         "points": 4,
         "amount": 40
@@ -177,6 +173,10 @@
       "Debrup Mondal": {
         "points": 0,
         "amount": 0
+      },
+      "Monirul Molla": {
+        "points": 4,
+        "amount": 40
       }
     }
   }
