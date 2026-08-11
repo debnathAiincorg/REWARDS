@@ -43,7 +43,7 @@
     },
     "Pratim Rath": {
       "Punctuality": 0,
-      "L&D": 1,
+      "L&D": 0,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
@@ -99,7 +99,7 @@
         "Anurima Nath": 2,
         "Madhuparna Naskar": 1,
         "Atreyee Majumder": 2,
-        "Pratim Rath": 1,
+        "Pratim Rath": 0,
         "Rahul Paul": 2,
         "Monirul Molla": 0,
         "Debnath Paul": 2,
@@ -140,15 +140,15 @@
         "points": 1,
         "amount": 10
       },
-      "Pratim Rath": {
-        "points": 1,
-        "amount": 10
-      },
       "Debrup Mondal": {
         "points": 0,
         "amount": 0
       },
       "Monirul Molla": {
+        "points": 0,
+        "amount": 0
+      },
+      "Pratim Rath": {
         "points": 0,
         "amount": 0
       }
