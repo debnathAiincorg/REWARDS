@@ -1,9 +1,9 @@
 {
-  "date": "2026-08-31",
+  "date": "2026-09-01",
   "employees": {
     "Pradip Ray": {
-      "Punctuality": 0,
-      "L&D": 0,
+      "Punctuality": 1,
+      "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
@@ -18,7 +18,7 @@
       "Extraordinary Performance": 0
     },
     "Anurima Nath": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -96,46 +96,58 @@
         "Monirul Molla": 1,
         "Debnath Paul": 1,
         "Debrup Mondal": 0
+      },
+      "2026-09-01": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 1,
+        "Madhuparna Naskar": 2,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 1,
+        "Rahul Paul": 2,
+        "Monirul Molla": 1,
+        "Debnath Paul": 1,
+        "Debrup Mondal": 0
       }
     },
     "totals": {
-      "Anurima Nath": {
-        "points": 2,
-        "amount": 20
-      },
       "Atreyee Majumder": {
-        "points": 2,
-        "amount": 20
+        "points": 4,
+        "amount": 40
       },
       "Madhuparna Naskar": {
+        "points": 4,
+        "amount": 40
+      },
+      "Pradip Ray": {
         "points": 2,
         "amount": 20
       },
       "Rahul Paul": {
+        "points": 4,
+        "amount": 40
+      },
+      "Anurima Nath": {
+        "points": 3,
+        "amount": 30
+      },
+      "Debnath Paul": {
         "points": 2,
         "amount": 20
       },
-      "Debnath Paul": {
-        "points": 1,
-        "amount": 10
-      },
       "Monirul Molla": {
-        "points": 1,
-        "amount": 10
+        "points": 2,
+        "amount": 20
       },
       "Pratim Rath": {
-        "points": 1,
-        "amount": 10
+        "points": 2,
+        "amount": 20
       },
       "Srijan Banerjee": {
-        "points": 1,
-        "amount": 10
+        "points": 2,
+        "amount": 20
       },
       "Debrup Mondal": {
-        "points": 0,
-        "amount": 0
-      },
-      "Pradip Ray": {
         "points": 0,
         "amount": 0
       },
