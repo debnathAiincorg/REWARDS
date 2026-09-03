@@ -689,3 +689,220 @@ def test_format_prev_day_card_renders_notes_column():
     assert notes_item["text"] == "Washroom work+ Ticket"
     assert notes_item["wrap"] is True
     assert "horizontalAlignment" not in notes_item
+
+
+# ── Weekly Report name scoping ────────────────────────────────────────────────
+
+# Evaluated at import purely to drive the skipif below; each test re-reads the
+# range itself so it stays correct on whatever weekday the suite runs.
+_WEEK_START, _WEEK_END = module._get_week_range()
+
+
+def make_test_workbook_without_date(rows):
+    """Like make_test_workbook but with no 'Date' header at all."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Performance Bonus"
+    headers = ["Index", "Name"] + CATEGORIES
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    for r, row in enumerate(rows, 2):
+        ws.cell(row=r, column=1, value=r - 1)
+        ws.cell(row=r, column=2, value=row["name"])
+        for col, cat in enumerate(CATEGORIES, 3):
+            ws.cell(row=r, column=col, value=row.get(cat, 0))
+    return wb
+
+
+def test_get_cumulative_data_excludes_name_absent_from_week_range(tmp_path):
+    """A name whose only rows predate this week's range must not appear on the
+    Weekly Report at all — not even as a 0-point row."""
+    start, end = module._get_week_range()
+    stale_dt = datetime.combine(start - timedelta(days=30), datetime.min.time())
+    in_range_dt = datetime.combine(end, datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": stale_dt, "name": "OldTimer", "Punctuality": 1, "L&D": 1},
+        {"date": in_range_dt, "name": "Current", "Punctuality": 1, "L&D": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    names = [e["name"] for e in employees]
+    assert "OldTimer" not in names
+    assert "Current" in names
+
+
+@pytest.mark.skipif(
+    _WEEK_START == _WEEK_END,
+    reason="range is a single day (Tuesday), so there is no earlier in-week day to test",
+)
+def test_get_cumulative_data_keeps_name_seen_earlier_in_week(tmp_path):
+    """Once a name appears inside the week's range it stays on the Weekly Report
+    for the rest of that week, even with no row on the most recent day."""
+    start, end = module._get_week_range()
+    early_dt = datetime.combine(start, datetime.min.time())
+    latest_dt = datetime.combine(end, datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": early_dt, "name": "EarlyBird",
+         "Punctuality": 1, "L&D": 1, "Innovation": 1},
+        {"date": latest_dt, "name": "Regular", "Punctuality": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    early_bird = next(e for e in employees if e["name"] == "EarlyBird")
+    assert early_bird["points"] == 3
+    assert early_bird["prev_day_points"] == 0
+
+
+def test_get_cumulative_data_includes_zero_point_row_in_week(tmp_path):
+    """Row presence, not points, decides membership: an all-zero row inside the
+    range still lists that employee, at 0 points."""
+    start, end = module._get_week_range()
+    in_range_dt = datetime.combine(end, datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": in_range_dt, "name": "Zeroed"},  # every category defaults to 0
+        {"date": in_range_dt, "name": "Scorer", "Punctuality": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    zeroed = next(e for e in employees if e["name"] == "Zeroed")
+    assert zeroed["points"] == 0
+    assert zeroed["amount"] == 0
+
+
+def test_get_cumulative_data_totals_unchanged_by_excluded_name(tmp_path):
+    """Dropping an out-of-range name must not move the TOTAL row — it only ever
+    contributed 0 to both the weekly and previous-day sums."""
+    start, end = module._get_week_range()
+    stale_dt = datetime.combine(start - timedelta(days=30), datetime.min.time())
+    in_range_dt = datetime.combine(end, datetime.min.time())
+
+    in_range_rows = [
+        {"date": in_range_dt, "name": "Ann", "Punctuality": 1, "L&D": 1},
+        {"date": in_range_dt, "name": "Ben", "Innovation": 1},
+    ]
+    clean_file = str(tmp_path / "clean.xlsx")
+    make_test_workbook(in_range_rows).save(clean_file)
+    stale_file = str(tmp_path / "stale.xlsx")
+    make_test_workbook(
+        in_range_rows + [{"date": stale_dt, "name": "OldTimer", "Punctuality": 5}]
+    ).save(stale_file)
+
+    with patch.object(module, "TEMP_FILE", clean_file):
+        _, clean_employees, _ = module.get_cumulative_data()
+    with patch.object(module, "TEMP_FILE", stale_file):
+        _, stale_employees, _ = module.get_cumulative_data()
+
+    assert "OldTimer" not in [e["name"] for e in stale_employees]
+    for field in ("points", "amount", "prev_day_points", "prev_day_amount"):
+        assert sum(e[field] for e in stale_employees) == sum(e[field] for e in clean_employees)
+    assert sum(e["points"] for e in stale_employees) == 3
+
+
+def test_get_cumulative_data_without_date_column_lists_all_names(tmp_path):
+    """With no Date column nothing can be range-filtered, so the whole-sheet name
+    list is preserved rather than emitting an empty report."""
+    wb = make_test_workbook_without_date([
+        {"name": "Ivy", "Punctuality": 1},
+        {"name": "Jack", "L&D": 1},
+    ])
+    test_file = str(tmp_path / "source.xlsx")
+    wb.save(test_file)
+
+    with patch.object(module, "TEMP_FILE", test_file):
+        week_label, employees, prev_day_breakdown = module.get_cumulative_data()
+
+    assert week_label is not None
+    assert sorted(e["name"] for e in employees) == ["Ivy", "Jack"]
+
+
+# ── run_report() exit codes and the empty-week clean skip ─────────────────────
+
+def run_report_against(tmp_path, wb):
+    """Drive run_report() over a test workbook with the network and Teams stubbed.
+
+    Returns (exit_code, snapshot_path, cards_sent).
+    """
+    xlsx = str(tmp_path / "source.xlsx")
+    wb.save(xlsx)
+    snap = str(tmp_path / "snapshot.json")
+    sent = []
+
+    def fake_send(url, card):
+        sent.append(card)
+        return True
+
+    with patch.object(module, "TEMP_FILE", xlsx), \
+         patch.object(module, "SNAPSHOT_FILE", snap), \
+         patch.object(module, "download_source_file", lambda: True), \
+         patch.object(module, "cleanup_temp_file", lambda: True), \
+         patch.object(module, "send_teams_webhook_message", fake_send):
+        code = module.run_report()
+
+    return code, snap, sent
+
+
+def test_run_report_empty_week_is_a_clean_skip(tmp_path):
+    """Nobody with a row inside the week's range is an empty week, not a failure:
+    exit 0, snapshot saved, nothing sent to Teams."""
+    start, end = module._get_week_range()
+    stale_dt = datetime.combine(start - timedelta(days=30), datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": stale_dt, "name": "StaleSam", "Punctuality": 1, "L&D": 1},
+    ])
+    code, snap, sent = run_report_against(tmp_path, wb)
+
+    assert code == 0
+    assert os.path.exists(snap)
+    assert sent == []
+
+
+def test_run_report_missing_name_column_still_exits_one(tmp_path):
+    """A sheet with no Name column is a real read failure: exit 1, nothing sent,
+    and no snapshot written."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Daily Performance Bonus"
+    for col, h in enumerate(["Index", "Date"] + CATEGORIES, 1):
+        ws.cell(row=1, column=col, value=h)
+
+    code, snap, sent = run_report_against(tmp_path, wb)
+
+    assert code == 1
+    assert sent == []
+    assert not os.path.exists(snap)
+
+
+def test_run_report_empty_week_snapshot_has_empty_totals_for_current_week(tmp_path):
+    """The snapshot written on an empty week carries an empty week.totals against
+    the current week_start, so the dashboard shows the empty week rather than a
+    stale one."""
+    start, end = module._get_week_range()
+    stale_dt = datetime.combine(start - timedelta(days=30), datetime.min.time())
+
+    wb = make_test_workbook([
+        {"date": stale_dt, "name": "StaleSam", "Punctuality": 1, "L&D": 1},
+    ])
+    code, snap, sent = run_report_against(tmp_path, wb)
+
+    assert code == 0
+    with open(snap) as f:
+        data = json.load(f)
+    assert data["week"]["totals"] == {}
+    assert data["week"]["week_start"] == start.isoformat()
+    assert data["employees"] == {}

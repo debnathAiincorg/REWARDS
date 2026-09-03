@@ -43,6 +43,8 @@ A Python script that reads employee performance data from a SharePoint Excel fil
 
 - **Weekly Card:**
   - Sums all point columns per employee within the weekly date range
+  - Lists **only employees with at least one row dated inside the week's range** — a name with no row in the range is absent from the card entirely, not shown at 0 points
+  - Once a name appears it persists for the rest of that week (their points simply stop increasing if they are not entered again); at the week boundary they drop off unless they have a row in the new range
   - Also aggregates the **previous day** separately (for "Previous Day Point/Amount" columns)
   - **Amount = Points × ₹10**
   - Employees sorted by **previous day amount (descending), name (ascending) as tiebreaker**
@@ -72,6 +74,20 @@ Change detection:
   [3] Weekly Performance Report total changed (per-employee weekly points/amount): True
 [INFO] Sending — triggered by: Weekly Performance Report total changed
 ```
+
+#### Runs that end without sending
+
+Two paths finish without posting to Teams, and neither is a failure — both exit **0**:
+
+- **Nothing changed** — all three conditions above match. The snapshot is still rewritten so the baseline stays current.
+- **Empty week** — no employee has a row dated inside the week's range (`start`..`end`), so the Weekly Report would have no rows at all. This happens on a run before the week's first day has been entered (a Tuesday run covers Monday only), or across a week with no working days at all. Rather than posting all-zero cards, the script names the range it found nothing in and rewrites the snapshot with an empty `week["totals"]` against the current `week_start`, so the dashboard shows the empty week rather than a stale one. The Previous Day breakdown card is skipped as well, including the Monday zero-fill.
+
+```
+[INFO] No employee has a row dated inside the week's range (2026-08-31 to 2026-08-31) — nothing to report.
+[INFO] Baseline snapshot updated (empty week, no send needed)
+```
+
+A **missing `Name` column is not a clean skip** — the sheet can't be read at all, so the script prints `[ERROR] No data to send.`, leaves the snapshot untouched, and exits **1**, which fails the GitHub Actions step. A failed download and a failed card send exit **1** the same way. The distinction is deliberate: an empty week means there is legitimately nothing to report, while these mean the run could not do its job.
 
 Card titles are always plain — **"Previous Day Performance Breakdown"** and **"Weekly Performance Report"** — whether or not the send was triggered by a correction. There is no "🔧 Corrected Report -" style prefix.
 
@@ -304,7 +320,7 @@ Change detection:
 
 ✓ **Automatic column detection** — No hardcoded column positions  
 ✓ **Optional Notes column** — free-text per employee/day, auto-detected, excluded from category detection and point totals, shown on the Previous Day Teams card  
-✓ **Automatic employee discovery** — New rows/names picked up dynamically  
+✓ **Automatic employee discovery** — New rows/names picked up dynamically; the Weekly Report lists only names with a row inside the current week's range, and a name persists for the rest of that week once it appears  
 ✓ **Deduplication** — Prevents double-counting on duplicate (name, date) rows  
 ✓ **Two-card split** — Breakdown card sent independently from weekly summary  
 ✓ **Monday special case** — Previous day breakdown shows all employees with 0s for Sunday  

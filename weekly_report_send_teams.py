@@ -273,13 +273,6 @@ def get_cumulative_data():
             seen.add(str(val).strip())
             all_names.append(str(val).strip())
 
-    # Aggregate points per employee within date range
-    totals = defaultdict(int)
-    prev_day_totals = defaultdict(int)
-    for name in all_names:
-        totals[name] = 0
-        prev_day_totals[name] = 0
-
     # Deduplicate rows by (name, date) to prevent double-counting
     row_data = {}  # key: (name, date), value: points
     prev_day_breakdown = {}  # key: (name, date), value: {category: value}
@@ -310,6 +303,24 @@ def get_cumulative_data():
                 notes_val = ws.cell(row=row, column=notes_col).value if notes_col else None
                 category_values["Notes"] = str(notes_val).strip() if notes_val else ""
                 prev_day_breakdown[key] = category_values
+
+    # Only employees with at least one row inside this week's report range are
+    # listed on the Weekly Performance Report. Seeding from the whole sheet made
+    # any name ever entered linger forever as a 0-point row, so the weekly card
+    # kept showing people the daily card had already dropped.
+    if date_col:
+        week_names = {name for (name, row_date) in row_data if start <= row_date <= end}
+    else:
+        # No Date column: nothing can be range-filtered, so preserve the old
+        # whole-sheet behaviour rather than emitting an empty report.
+        week_names = set(all_names)
+
+    # Aggregate points per employee within date range
+    totals = defaultdict(int)
+    prev_day_totals = defaultdict(int)
+    for name in week_names:
+        totals[name] = 0
+        prev_day_totals[name] = 0
 
     # Calculate weekly and previous-day totals from deduplicated data
     for (name, row_date), pts in row_data.items():
@@ -637,13 +648,20 @@ def has_weekly_totals_changed(week_start_str, fresh_totals):
 
 
 # MAIN EXECUTION
-if __name__ == "__main__":
+def run_report():
+    """Run one full report cycle and return the intended process exit code.
+
+    0 = work finished normally: cards sent, nothing changed since the last run,
+        or an empty week (nobody has a row inside the report range).
+    1 = a real failure: the download failed, the sheet could not be read, or a
+        card failed to send.
+    """
     print("=" * 60)
     print("WEEKLY PERFORMANCE REPORT - TEAMS SENDER")
     print("=" * 60)
 
     if not download_source_file():
-        exit(1)
+        return 1
 
     yesterday_date = datetime.now().date() - timedelta(days=1)
     yesterday_str = yesterday_date.isoformat()
@@ -656,12 +674,25 @@ if __name__ == "__main__":
     print("Determining date range and reading Excel data...")
     week_label, employee_data, prev_day_breakdown = get_cumulative_data()
 
-    if not week_label or not employee_data:
+    if not week_label:
         print("[ERROR] No data to send.")
         cleanup_temp_file()
-        exit(1)
+        return 1
 
     fresh_weekly_totals = get_weekly_totals(employee_data)
+
+    if not employee_data:
+        # An empty week is not a failure: nobody has been entered inside the
+        # report range yet (a run before the first day's rows are added, or a
+        # week with no working days). Refresh the baseline so the dashboard
+        # shows the empty week, then skip the send rather than posting all-zero
+        # cards or failing the run.
+        print(f"[INFO] No employee has a row dated inside the week's range "
+              f"({week_start_str} to {yesterday_str}) — nothing to report.")
+        save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days, fresh_weekly_totals)
+        print("[INFO] Baseline snapshot updated (empty week, no send needed)")
+        cleanup_temp_file()
+        return 0
 
     snapshot = load_snapshot()
 
@@ -703,7 +734,7 @@ if __name__ == "__main__":
         print("[INFO] No change detected since last check (date, Previous Day Breakdown, and Weekly Report totals all match). Exiting silently.")
         print("[INFO] Baseline snapshot updated (no send needed)")
         cleanup_temp_file()
-        exit(0)
+        return 0
 
     reasons = []
     if date_changed:
@@ -750,7 +781,7 @@ if __name__ == "__main__":
             else:
                 print("[ERROR] Failed to send Previous Day card to Teams")
                 cleanup_temp_file()
-                exit(1)
+                return 1
 
     weekly_card = format_teams_message(week_label, employee_data)
     print("Sending Weekly Performance Report card to Teams...")
@@ -760,10 +791,15 @@ if __name__ == "__main__":
     else:
         print("[ERROR] Failed to send Weekly Report card to Teams")
         cleanup_temp_file()
-        exit(1)
+        return 1
 
     save_snapshot(yesterday_str, fresh_yesterday_data, week_start_str, fresh_week_days, fresh_weekly_totals)
     print(f"\n[OK] Total cards sent: {cards_sent}")
     cleanup_temp_file()
     print("=" * 60)
+    return 0
+
+
+if __name__ == "__main__":
+    exit(run_report())
 
