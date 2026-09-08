@@ -34,7 +34,7 @@
       "Extraordinary Performance": 0
     },
     "Atreyee Majumder": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -90,7 +90,7 @@
         "Srijan Banerjee": 1,
         "Anurima Nath": 0,
         "Madhuparna Naskar": 1,
-        "Atreyee Majumder": 2,
+        "Atreyee Majumder": 1,
         "Pratim Rath": 2,
         "Rahul Paul": 2,
         "Monirul Molla": 0,
@@ -99,10 +99,6 @@
       }
     },
     "totals": {
-      "Atreyee Majumder": {
-        "points": 2,
-        "amount": 20
-      },
       "Debnath Paul": {
         "points": 2,
         "amount": 20
@@ -118,6 +114,10 @@
       "Rahul Paul": {
         "points": 2,
         "amount": 20
+      },
+      "Atreyee Majumder": {
+        "points": 1,
+        "amount": 10
       },
       "Madhuparna Naskar": {
         "points": 1,
