@@ -23,7 +23,7 @@
       "Extra Hours": 0,
       "Fluency Compliance": 0,
       "Innovation": 0,
-      "Extraordinary Performance": 2
+      "Extraordinary Performance": 0
     },
     "Madhuparna Naskar": {
       "Punctuality": 1,
@@ -136,7 +136,7 @@
       "2026-09-25": {
         "Pradip Ray": 2,
         "Srijan Banerjee": 1,
-        "Anurima Nath": 4,
+        "Anurima Nath": 2,
         "Madhuparna Naskar": 2,
         "Atreyee Majumder": 2,
         "Pratim Rath": 2,
@@ -148,8 +148,8 @@
     },
     "totals": {
       "Anurima Nath": {
-        "points": 12,
-        "amount": 120
+        "points": 10,
+        "amount": 100
       },
       "Atreyee Majumder": {
         "points": 8,
