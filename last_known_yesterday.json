@@ -1,5 +1,5 @@
 {
-  "date": "2026-09-28",
+  "date": "2026-09-29",
   "employees": {
     "Pradip Ray": {
       "Punctuality": 1,
@@ -34,7 +34,7 @@
       "Extraordinary Performance": 0
     },
     "Atreyee Majumder": {
-      "Punctuality": 0,
+      "Punctuality": 1,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -42,7 +42,7 @@
       "Extraordinary Performance": 0
     },
     "Pratim Rath": {
-      "Punctuality": 0,
+      "Punctuality": 1,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -66,7 +66,7 @@
       "Extraordinary Performance": 0
     },
     "Debnath Paul": {
-      "Punctuality": 1,
+      "Punctuality": 0,
       "L&D": 1,
       "Extra Hours": 0,
       "Fluency Compliance": 0,
@@ -96,44 +96,56 @@
         "Monirul Molla": 1,
         "Debnath Paul": 2,
         "Debrup Mondal": 0
+      },
+      "2026-09-29": {
+        "Pradip Ray": 2,
+        "Srijan Banerjee": 1,
+        "Anurima Nath": 2,
+        "Madhuparna Naskar": 1,
+        "Atreyee Majumder": 2,
+        "Pratim Rath": 2,
+        "Rahul Paul": 2,
+        "Monirul Molla": 1,
+        "Debnath Paul": 1,
+        "Debrup Mondal": 0
       }
     },
     "totals": {
       "Anurima Nath": {
-        "points": 2,
-        "amount": 20
-      },
-      "Debnath Paul": {
-        "points": 2,
-        "amount": 20
-      },
-      "Pradip Ray": {
-        "points": 2,
-        "amount": 20
-      },
-      "Rahul Paul": {
-        "points": 2,
-        "amount": 20
+        "points": 4,
+        "amount": 40
       },
       "Atreyee Majumder": {
-        "points": 1,
-        "amount": 10
+        "points": 3,
+        "amount": 30
       },
-      "Madhuparna Naskar": {
-        "points": 1,
-        "amount": 10
-      },
-      "Monirul Molla": {
-        "points": 1,
-        "amount": 10
+      "Pradip Ray": {
+        "points": 4,
+        "amount": 40
       },
       "Pratim Rath": {
-        "points": 1,
-        "amount": 10
+        "points": 3,
+        "amount": 30
+      },
+      "Rahul Paul": {
+        "points": 4,
+        "amount": 40
+      },
+      "Debnath Paul": {
+        "points": 3,
+        "amount": 30
+      },
+      "Madhuparna Naskar": {
+        "points": 2,
+        "amount": 20
+      },
+      "Monirul Molla": {
+        "points": 2,
+        "amount": 20
       },
       "Srijan Banerjee": {
-        "points": 1,
-        "amount": 10
+        "points": 2,
+        "amount": 20
       },
       "Debrup Mondal": {
         "points": 0,
