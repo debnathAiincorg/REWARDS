@@ -1,87 +1,6 @@
 {
-  "date": "2026-10-16",
-  "employees": {
-    "Pradip Ray": {
-      "Punctuality": 1,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Srijan Banerjee": {
-      "Punctuality": 0,
-      "L&D": 0,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Anurima Nath": {
-      "Punctuality": 1,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Madhuparna Naskar": {
-      "Punctuality": 0,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Atreyee Majumder": {
-      "Punctuality": 1,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Pratim Rath": {
-      "Punctuality": 1,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Rahul Paul": {
-      "Punctuality": 0,
-      "L&D": 0,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Monirul Molla": {
-      "Punctuality": 1,
-      "L&D": 0,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Debnath Paul": {
-      "Punctuality": 0,
-      "L&D": 1,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    },
-    "Debrup Mondal": {
-      "Punctuality": 0,
-      "L&D": 0,
-      "Extra Hours": 0,
-      "Fluency Compliance": 0,
-      "Innovation": 0,
-      "Extraordinary Performance": 0
-    }
-  },
+  "date": "2026-10-17",
+  "employees": {},
   "week": {
     "week_start": "2026-10-12",
     "days": {
@@ -155,17 +74,13 @@
         "points": 9,
         "amount": 90
       },
-      "Pradip Ray": {
-        "points": 10,
-        "amount": 100
-      },
-      "Pratim Rath": {
-        "points": 9,
-        "amount": 90
-      },
       "Debnath Paul": {
         "points": 6,
         "amount": 60
+      },
+      "Debrup Mondal": {
+        "points": 0,
+        "amount": 0
       },
       "Madhuparna Naskar": {
         "points": 7,
@@ -175,9 +90,13 @@
         "points": 4,
         "amount": 40
       },
-      "Debrup Mondal": {
-        "points": 0,
-        "amount": 0
+      "Pradip Ray": {
+        "points": 10,
+        "amount": 100
+      },
+      "Pratim Rath": {
+        "points": 9,
+        "amount": 90
       },
       "Rahul Paul": {
         "points": 8,
